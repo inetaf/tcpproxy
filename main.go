@@ -25,8 +25,11 @@ import (
 	"time"
 )
 
-var cfgFile = flag.String("conf", "", "configuration file")
-var listen = flag.String("listen", ":443", "listening port")
+var (
+	cfgFile      = flag.String("conf", "", "configuration file")
+	listen       = flag.String("listen", ":443", "listening port")
+	helloTimeout = flag.Duration("hello-timeout", 3*time.Second, "how long to wait for the TLS ClientHello")
+)
 
 var config Config
 
@@ -71,6 +74,15 @@ func (c *Conn) logf(msg string, args ...interface{}) {
 func (c *Conn) abort(alert byte, msg string, args ...interface{}) {
 	c.logf(msg, args...)
 	alertMsg := []byte{21, 3, byte(c.tlsMinor), 0, 2, 2, alert}
+
+	if err := c.SetWriteDeadline(time.Now().Add(*helloTimeout)); err != nil {
+		c.logf("error while setting write deadline during abort: %s", err)
+		// Do NOT send the alert if we can't set a write deadline,
+		// that could result in leaking a connection for an extended
+		// period.
+		return
+	}
+
 	if _, err := c.Write(alertMsg); err != nil {
 		c.logf("error while sending alert: %s", err)
 	}
@@ -82,6 +94,11 @@ func (c *Conn) sniFailed(msg string, args ...interface{})     { c.abort(112, msg
 func (c *Conn) proxy() {
 	defer c.Close()
 
+	if err := c.SetReadDeadline(time.Now().Add(*helloTimeout)); err != nil {
+		c.internalError("Setting read deadline for ClientHello: %s", err)
+		return
+	}
+
 	var (
 		err          error
 		handshakeBuf bytes.Buffer
@@ -89,6 +106,11 @@ func (c *Conn) proxy() {
 	c.hostname, c.tlsMinor, err = extractSNI(io.TeeReader(c, &handshakeBuf))
 	if err != nil {
 		c.internalError("Extracting SNI: %s", err)
+		return
+	}
+
+	if err = c.SetReadDeadline(time.Time{}); err != nil {
+		c.internalError("Clearing read deadline for ClientHello: %s", err)
 		return
 	}
 
