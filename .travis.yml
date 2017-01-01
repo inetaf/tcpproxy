@@ -1,0 +1,16 @@
+language: go
+go_import_path: go.universe.tf/tlsrouter
+go:
+  - 1.6
+  - 1.7
+  - tip
+os:
+  - linux
+install:
+  - go get github.com/golang/lint/golint
+before_script:
+script:
+  - go build .
+  - go test .
+  - go vet .
+  - golint .
