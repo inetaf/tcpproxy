@@ -63,16 +63,16 @@ type Conn struct {
 	backendConn *net.TCPConn
 }
 
-func (c *Conn) log(msg string, args ...interface{}) {
+func (c *Conn) logf(msg string, args ...interface{}) {
 	msg = fmt.Sprintf(msg, args...)
 	log.Printf("%s <> %s: %s", c.RemoteAddr(), c.LocalAddr(), msg)
 }
 
 func (c *Conn) abort(alert byte, msg string, args ...interface{}) {
-	c.log(msg, args...)
+	c.logf(msg, args...)
 	alertMsg := []byte{21, 3, byte(c.tlsMinor), 0, 2, 2, alert}
 	if _, err := c.Write(alertMsg); err != nil {
-		c.log("error while sending alert: %s", err)
+		c.logf("error while sending alert: %s", err)
 	}
 }
 
@@ -98,7 +98,7 @@ func (c *Conn) proxy() {
 		return
 	}
 
-	c.log("routing %q to %q", c.hostname, c.backend)
+	c.logf("routing %q to %q", c.hostname, c.backend)
 	backend, err := net.DialTimeout("tcp", c.backend, 10*time.Second)
 	if err != nil {
 		c.internalError("failed to dial backend %q for %q: %s", c.backend, c.hostname, err)
