@@ -36,7 +36,22 @@ type Config struct {
 }
 
 func dnsRegex(s string) (*regexp.Regexp, error) {
-	return regexp.Compile(s)
+	if len(s) >= 2 && s[0] == '/' && s[len(s)-1] == '/' {
+		return regexp.Compile(s[1 : len(s)-1])
+	}
+
+	var b []string
+	for _, f := range strings.Split(s, ".") {
+		switch f {
+		case "*":
+			b = append(b, `[^.]+`)
+		case "":
+			return nil, fmt.Errorf("DNS name %q has empty label", s)
+		default:
+			b = append(b, regexp.QuoteMeta(f))
+		}
+	}
+	return regexp.Compile(strings.Join(b, `\.`))
 }
 
 func (c *Config) Match(hostname string) string {
