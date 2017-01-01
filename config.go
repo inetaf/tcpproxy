@@ -24,6 +24,7 @@ import (
 	"sync"
 )
 
+// A Route maps a match on a domain name to a backend.
 type Route struct {
 	match   *regexp.Regexp
 	backend string
@@ -54,6 +55,7 @@ func dnsRegex(s string) (*regexp.Regexp, error) {
 	return regexp.Compile(strings.Join(b, `\.`))
 }
 
+// Match returns the backend for hostname.
 func (c *Config) Match(hostname string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -65,6 +67,7 @@ func (c *Config) Match(hostname string) string {
 	return ""
 }
 
+// Read replaces the current Config with one read from r.
 func (c *Config) Read(r io.Reader) error {
 	var routes []Route
 
@@ -97,6 +100,7 @@ func (c *Config) Read(r io.Reader) error {
 	return nil
 }
 
+// ReadFile replaces the current Config with one read from path.
 func (c *Config) ReadFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {

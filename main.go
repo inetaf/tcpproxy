@@ -53,6 +53,7 @@ func main() {
 	}
 }
 
+// A Conn handles the TLS proxying of one user connection.
 type Conn struct {
 	*net.TCPConn
 
