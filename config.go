@@ -52,7 +52,7 @@ func dnsRegex(s string) (*regexp.Regexp, error) {
 			b = append(b, regexp.QuoteMeta(f))
 		}
 	}
-	return regexp.Compile(strings.Join(b, `\.`))
+	return regexp.Compile(fmt.Sprintf("^%s$", strings.Join(b, `\.`)))
 }
 
 // Match returns the backend for hostname.
