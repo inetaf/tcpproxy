@@ -73,6 +73,11 @@ func (c *Config) Read(r io.Reader) error {
 
 	s := bufio.NewScanner(r)
 	for s.Scan() {
+		if strings.HasPrefix(strings.TrimSpace(s.Text()), "#") {
+			// Comment, ignore.
+			continue
+		}
+
 		fs := strings.Fields(s.Text())
 		switch len(fs) {
 		case 0:
