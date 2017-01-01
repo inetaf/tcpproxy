@@ -33,9 +33,14 @@ google.* 10.20.30.40:443
 /(alpha|beta|gamma)\.mon(itoring)?\.dave\.tf/ 100.200.100.200:443
 ```
 
-TLSRouter takes 2 commandline arguments: the listen address (":443" by default), and
-configuration to use.
+TLSRouter takes one mandatory commandline argument, the configuration file to use:
 
 ```shell
-tlsrouter -listen 1.2.3.4:443 -conf tlsrouter.conf
+tlsrouter -conf tlsrouter.conf
 ```
+
+Optional flags are:
+
+ * `-listen <addr>`: set the listen address (default `:443`)
+ * `-hello-timeout <duration>`: how long to wait for the start of the
+   TLS handshake (default `3s`)
