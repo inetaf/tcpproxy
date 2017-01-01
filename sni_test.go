@@ -152,12 +152,6 @@ func TestHandshakeRecord(t *testing.T) {
 		tlsver int
 	}{
 		{
-			// SSL 3.0, 1b packet
-			[]byte{22, 3, 0, 0, 1, 3},
-			[]byte{3},
-			0,
-		},
-		{
 			// TLS 1.0, 1b packet
 			[]byte{22, 3, 1, 0, 1, 3},
 			[]byte{3},
@@ -226,6 +220,12 @@ func TestHandshakeRecord(t *testing.T) {
 		{
 			// wrong TLS minor version
 			[]byte{22, 3, 42, 0, 1, 3},
+			nil,
+			0,
+		},
+		{
+			// Obsolete SSL 3.0
+			[]byte{22, 3, 0, 0, 1, 3},
 			nil,
 			0,
 		},
@@ -308,13 +308,7 @@ func TestParseHello(t *testing.T) {
 			true,
 		},
 		{
-			// First valid packet. SSL 3.0, no extensions present.
-			packet([]byte{1, 0, 0, 73, 3, 0}, slice(32), []byte{32}, slice(32), []byte{0, 2, 1, 2, 1, 0}),
-			nil,
-			false,
-		},
-		{
-			// TLS 1.0, no extensions present.
+			// First valid packet. TLS 1.0, no extensions present.
 			packet([]byte{1, 0, 0, 73, 3, 1}, slice(32), []byte{32}, slice(32), []byte{0, 2, 1, 2, 1, 0}),
 			nil,
 			false,

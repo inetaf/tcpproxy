@@ -105,8 +105,8 @@ func parseHello(b []byte) ([]byte, error) {
 		return nil, fmt.Errorf("ClientHello has unsupported version %d.%d", b[0], b[1])
 	}
 	switch b[1] {
-	case 0, 1, 2, 3:
-		// SSL 3, TLS 1.0, TLS 1.1, TLS 1.2
+	case 1, 2, 3:
+		// TLS 1.0, TLS 1.1, TLS 1.2
 	default:
 		return nil, fmt.Errorf("TLS record has unsupported version %d.%d", b[0], b[1])
 	}
@@ -199,8 +199,8 @@ func handshakeRecord(r io.Reader) ([]byte, int, error) {
 		return nil, 0, fmt.Errorf("TLS record has unsupported version %d.%d", hdr.Major, hdr.Minor)
 	}
 	switch hdr.Minor {
-	case 0, 1, 2, 3:
-		// SSL 3, TLS 1.0, TLS 1.1, TLS 1.2
+	case 1, 2, 3:
+		// TLS 1.0, TLS 1.1, TLS 1.2
 	default:
 		return nil, 0, fmt.Errorf("TLS record has unsupported version %d.%d", hdr.Major, hdr.Minor)
 	}
