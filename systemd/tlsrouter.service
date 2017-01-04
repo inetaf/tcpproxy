@@ -1,0 +1,25 @@
+[Unit]
+Description=TLS SNI proxy
+Documentation=https://github.com/google/tlsrouter
+
+[Service]
+WorkingDirectory=/tmp
+ExecStart=/usr/bin/tlsrouter -conf /etc/tlsrouter.conf
+Restart=always
+User=nobody
+Group=nobody
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+NoNewPrivileges=true
+SystemCallFilter=~@clock @cpu-emulation @debug @keyring @module @mount @obsolete @privileged @raw-io
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
