@@ -15,15 +15,19 @@ script:
 - go test .
 - go vet .
 - golint .
-- fpm -s dir -t deb -n tlsrouter -p tlsrouter.deb -v $(date '+%Y%m%d%H%M%S') --license Apache2 --vendor
-  "David Anderson <dave@natulte.net>" --maintainer "David Anderson <dave@natulte.net>"
-  --description "TLS SNI router" --url "https://github.com/google/tlsrouter" ./tlsrouter=/usr/bin/tlsrouter
+- fpm -s dir -t deb -n tlsrouter -v $(date '+%Y%m%d%H%M%S')
+  --license Apache2
+  --vendor "David Anderson <dave@natulte.net>"
+  --maintainer "David Anderson <dave@natulte.net>"
+  --description "TLS SNI router"
+  --url "https://github.com/google/tlsrouter"
+  ./tlsrouter=/usr/bin/tlsrouter
   ./systemd/tlsrouter.service=/lib/systemd/system/tlsrouter.service
 
 env:
   # Packagecloud API key, for prune_old_versions.go
   - secure: "SRcNwt+45QyPS1w9aGxMg9905Y6d9w4mBM29G6iTTnUB5nD7cAk4m+tf834knGSobVXlWcRnTDW8zrHdQ9yX22dPqCpH5qE+qzTmIvxRHrVJRMmPeYvligJ/9jYfHgQbvuRT8cUpIcpCQAla6rw8nXfKTOE3h8XqMP2hdc3DTVOu2HCfKCNco1tJ7is+AIAnFV2Wpsbb3ZsdKFvHvi2RKUfFaX61J1GNt2/XJIlZs8jC6Y1IAC+ftjql9UsAE/WjZ9fL0Ww1b9/LBIIGHXWI3HpVv9WvlhhIxIlJgOVjmU2lbSuj2w/EBDJ9cd1Qe+wJkT3yKzE1NRsNScVjGg+Ku5igJu/XXuaHkIX01+15BqgPduBYRL0atiNQDhqgBiSyVhXZBX9vsgsp0bgpKaBSF++CV18Q9dara8aljqqS33M3imO3I8JmXU10944QA9Wvu7pCYuIzXxhINcDXRvqxBqz5LnFJGwnGqngTrOCSVS2xn7Y+sjmhe1n5cPCEISlozfa9mPYPvMPp8zg3TbATOOM8CVfcpaNscLqa/+SExN3zMwSanjNKrBgoaQcBzGW5mIgSPxhXkWikBgapiEN7+2Y032Lhqdb9dYjH+EuwcnofspDjjMabWxnuJaln+E3/9vZi2ooQrBEtvymUTy4VMSnqwIX5bU7nPdIuQycdWhk="
-  
+
 deploy:
 - provider: packagecloud
   repository: tlsrouter
