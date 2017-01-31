@@ -7,6 +7,7 @@ go:
 os:
   - linux
 install:
+  - gem install fpm
   - go get github.com/golang/lint/golint
 before_script:
 script:
@@ -14,3 +15,4 @@ script:
   - go test .
   - go vet .
   - golint .
+  - fpm -s dir -t deb -n tlsrouter -v $(date '+%Y%m%d%H%M%S') --license Apache2 --vendor "David Anderson <dave@natulte.net>" --maintainer "David Anderson <dave@natulte.net>" --description "TLS SNI router" --url "https://github.com/google/tlsrouter" ./tlsrouter=/usr/bin/tlsrouter ./systemd/tlsrouter.service=/lib/systemd/system/tlsrouter.service
