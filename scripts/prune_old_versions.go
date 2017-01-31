@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"sort"
@@ -105,6 +106,13 @@ func packageVersions(user, repo, typ, distro, version, pkgname, arch string) ([]
 		return nil, fmt.Errorf("get versions.json: %s", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		msg, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("get error message of versions.json get: %s", err)
+		}
+		return nil, fmt.Errorf("get versions.json: %s (%q)", resp.Status, string(msg))
+	}
 
 	var files []packageMeta
 	if err := json.NewDecoder(resp.Body).Decode(&files); err != nil {
