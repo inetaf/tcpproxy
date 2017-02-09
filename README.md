@@ -23,7 +23,7 @@ use for a given hostname. The config file looks like:
 # Basic hostname -> backend mapping
 go.universe.tf localhost:1234
 
-# DNS wildcards are understoor as well.
+# DNS wildcards are understood as well.
 *.go.universe.tf 1.2.3.4:8080
 
 # DNS wildcards can go anywhere in name.
