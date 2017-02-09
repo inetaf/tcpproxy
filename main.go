@@ -31,34 +31,52 @@ var (
 	helloTimeout = flag.Duration("hello-timeout", 3*time.Second, "how long to wait for the TLS ClientHello")
 )
 
-var config Config
-
 func main() {
 	flag.Parse()
 
-	if err := config.ReadFile(*cfgFile); err != nil {
+	p := &Proxy{}
+	if err := p.Config.ReadFile(*cfgFile); err != nil {
 		log.Fatalf("Failed to read config %q: %s", *cfgFile, err)
 	}
 
-	l, err := net.Listen("tcp", *listen)
-	if err != nil {
-		log.Fatalf("Failed to listen: %s", err)
-	}
+	log.Fatalf("%s", p.ListenAndServe(*listen))
+}
 
+// Proxy routes connections to backends based on a Config.
+type Proxy struct {
+	Config Config
+	l      net.Listener
+}
+
+// Serve accepts connections from l and routes them according to TLS SNI.
+func (p *Proxy) Serve(l net.Listener) error {
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			log.Fatalf("Error while accepting: %s", err)
+			return fmt.Errorf("accept new conn: %s", err)
 		}
 
-		conn := &Conn{TCPConn: c.(*net.TCPConn)}
+		conn := &Conn{
+			TCPConn: c.(*net.TCPConn),
+			config:  &p.Config,
+		}
 		go conn.proxy()
 	}
+}
+
+// ListenAndServe creates a listener on addr calls Serve on it.
+func (p *Proxy) ListenAndServe(addr string) error {
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("create listener: %s", err)
+	}
+	return p.Serve(l)
 }
 
 // A Conn handles the TLS proxying of one user connection.
 type Conn struct {
 	*net.TCPConn
+	config *Config
 
 	tlsMinor    int
 	hostname    string
@@ -109,12 +127,14 @@ func (c *Conn) proxy() {
 		return
 	}
 
+	c.logf("extracted SNI %s", c.hostname)
+
 	if err = c.SetReadDeadline(time.Time{}); err != nil {
 		c.internalError("Clearing read deadline for ClientHello: %s", err)
 		return
 	}
 
-	c.backend = config.Match(c.hostname)
+	c.backend = c.config.Match(c.hostname)
 	if c.backend == "" {
 		c.sniFailed("no backend found for %q", c.hostname)
 		return

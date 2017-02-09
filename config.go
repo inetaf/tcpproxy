@@ -16,6 +16,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -34,6 +35,7 @@ type Route struct {
 type Config struct {
 	mu     sync.Mutex
 	routes []Route
+	acme   *ACME
 }
 
 func dnsRegex(s string) (*regexp.Regexp, error) {
@@ -59,6 +61,11 @@ func dnsRegex(s string) (*regexp.Regexp, error) {
 func (c *Config) Match(hostname string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if strings.HasSuffix(hostname, ".acme.invalid") {
+		return c.acme.Match(hostname)
+	}
+
 	for _, r := range c.routes {
 		if r.match.MatchString(hostname) {
 			return r.backend
@@ -70,6 +77,7 @@ func (c *Config) Match(hostname string) string {
 // Read replaces the current Config with one read from r.
 func (c *Config) Read(r io.Reader) error {
 	var routes []Route
+	var backends []string
 
 	s := bufio.NewScanner(r)
 	for s.Scan() {
@@ -90,6 +98,7 @@ func (c *Config) Read(r io.Reader) error {
 				return err
 			}
 			routes = append(routes, Route{re, fs[1]})
+			backends = append(backends, fs[1])
 		default:
 			// TODO: multiple backends?
 			return fmt.Errorf("too many fields on line: %q", s.Text())
@@ -102,6 +111,10 @@ func (c *Config) Read(r io.Reader) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.routes = routes
+	c.acme = &ACME{
+		backends: backends,
+		cache:    make(map[string]acmeCacheEntry),
+	}
 	return nil
 }
 
@@ -112,4 +125,9 @@ func (c *Config) ReadFile(path string) error {
 		return err
 	}
 	return c.Read(f)
+}
+
+func (c *Config) ReadString(cfg string) error {
+	b := bytes.NewBufferString(cfg)
+	return c.Read(b)
 }
