@@ -17,7 +17,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"time"
 )
@@ -65,11 +64,6 @@ func tryAcme(ctx context.Context, ch chan string, backend, hostname string) {
 	var res string
 	var err error
 	defer func() { ch <- res }()
-	defer func() {
-		if err != nil {
-			fmt.Println(err)
-		}
-	}()
 
 	dialer := net.Dialer{Timeout: 10 * time.Second}
 	conn, err := dialer.DialContext(ctx, "tcp", backend)
