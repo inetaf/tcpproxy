@@ -11,6 +11,7 @@ install:
 - go get github.com/golang/lint/golint
 before_script: 
 script:
+- go get -t .
 - go build .
 - go test .
 - go vet .
