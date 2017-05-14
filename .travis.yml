@@ -2,6 +2,7 @@ language: go
 go_import_path: go.universe.tf/tlsrouter
 go:
 - 1.7
+- 1.8
 - tip
 os:
 - linux
