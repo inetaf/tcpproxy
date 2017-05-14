@@ -31,6 +31,11 @@ google.* 10.20.30.40:443
 
 # RE2 regexes are also available
 /(alpha|beta|gamma)\.mon(itoring)?\.dave\.tf/ 100.200.100.200:443
+
+# If your backend supports HAProxy's PROXY protocol, you can enable
+# it to receive the real client ip:port.
+
+fancy.backend 2.3.4.5:443 PROXY
 ```
 
 TLSRouter takes one mandatory commandline argument, the configuration file to use:

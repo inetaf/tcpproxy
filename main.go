@@ -134,7 +134,8 @@ func (c *Conn) proxy() {
 		return
 	}
 
-	c.backend = c.config.Match(c.hostname)
+	addProxyHeader := false
+	c.backend, addProxyHeader = c.config.Match(c.hostname)
 	if c.backend == "" {
 		c.sniFailed("no backend found for %q", c.hostname)
 		return
@@ -149,6 +150,21 @@ func (c *Conn) proxy() {
 	defer backend.Close()
 
 	c.backendConn = backend.(*net.TCPConn)
+
+	// If the backend supports the HAProxy PROXY protocol, give it the
+	// real source information about the connection.
+	if addProxyHeader {
+		remote := c.TCPConn.RemoteAddr().(*net.TCPAddr)
+		local := c.TCPConn.LocalAddr().(*net.TCPAddr)
+		family := "TCP6"
+		if remote.IP.To4() != nil {
+			family = "TCP4"
+		}
+		if _, err := fmt.Fprintf(c.backendConn, "PROXY %s %s %s %d %d\r\n", family, remote.IP, local.IP, remote.Port, local.Port); err != nil {
+			c.internalError("failed to send PROXY header to %q: %s", c.backend, err)
+			return
+		}
+	}
 
 	// Replay the piece of the handshake we had to read to do the
 	// routing, then blindly proxy any other bytes.

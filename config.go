@@ -17,6 +17,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,8 +28,9 @@ import (
 
 // A Route maps a match on a domain name to a backend.
 type Route struct {
-	match   *regexp.Regexp
-	backend string
+	match     *regexp.Regexp
+	backend   string
+	proxyInfo bool
 }
 
 // Config stores the TLS routing configuration.
@@ -57,21 +59,21 @@ func dnsRegex(s string) (*regexp.Regexp, error) {
 	return regexp.Compile(fmt.Sprintf("^%s$", strings.Join(b, `\.`)))
 }
 
-// Match returns the backend for hostname.
-func (c *Config) Match(hostname string) string {
+// Match returns the backend for hostname, and whether to use the PROXY protocol.
+func (c *Config) Match(hostname string) (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if strings.HasSuffix(hostname, ".acme.invalid") {
-		return c.acme.Match(hostname)
+		return c.acme.Match(hostname), false
 	}
 
 	for _, r := range c.routes {
 		if r.match.MatchString(hostname) {
-			return r.backend
+			return r.backend, r.proxyInfo
 		}
 	}
-	return ""
+	return "", false
 }
 
 // Read replaces the current Config with one read from r.
@@ -97,7 +99,17 @@ func (c *Config) Read(r io.Reader) error {
 			if err != nil {
 				return err
 			}
-			routes = append(routes, Route{re, fs[1]})
+			routes = append(routes, Route{re, fs[1], false})
+			backends = append(backends, fs[1])
+		case 3:
+			re, err := dnsRegex(fs[0])
+			if err != nil {
+				return err
+			}
+			if fs[2] != "PROXY" {
+				return errors.New("third item on a line can only be PROXY")
+			}
+			routes = append(routes, Route{re, fs[1], true})
 			backends = append(backends, fs[1])
 		default:
 			// TODO: multiple backends?
@@ -127,6 +139,7 @@ func (c *Config) ReadFile(path string) error {
 	return c.Read(f)
 }
 
+// ReadString replaces the current Config with one read from cfg.
 func (c *Config) ReadString(cfg string) error {
 	b := bytes.NewBufferString(cfg)
 	return c.Read(b)

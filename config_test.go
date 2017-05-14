@@ -6,9 +6,14 @@ import (
 )
 
 func TestConfig(t *testing.T) {
+	type result struct {
+		backend string
+		proxy   bool
+	}
+
 	cases := []struct {
 		Config string
-		Tests  map[string]string
+		Tests  map[string]result
 	}{
 		{
 			Config: `
@@ -18,19 +23,21 @@ go.universe.tf 1.2.3.4
 # Comment
 google.* 3.4.5.6
 /gooo+gle\.com/ 4.5.6.7
+foobar.net 6.7.8.9 PROXY
 `,
-			Tests: map[string]string{
-				"go.universe.tf":     "1.2.3.4",
-				"foo.universe.tf":    "2.3.4.5",
-				"bar.universe.tf":    "2.3.4.5",
-				"google.com":         "3.4.5.6",
-				"google.fr":          "3.4.5.6",
-				"goooooooooogle.com": "4.5.6.7",
+			Tests: map[string]result{
+				"go.universe.tf":     result{"1.2.3.4", false},
+				"foo.universe.tf":    result{"2.3.4.5", false},
+				"bar.universe.tf":    result{"2.3.4.5", false},
+				"google.com":         result{"3.4.5.6", false},
+				"google.fr":          result{"3.4.5.6", false},
+				"goooooooooogle.com": result{"4.5.6.7", false},
+				"foobar.net":         result{"6.7.8.9", true},
 
-				"blah.com":            "",
-				"google.com.br":       "",
-				"foo.bar.universe.tf": "",
-				"goooooglexcom":       "",
+				"blah.com":            result{"", false},
+				"google.com.br":       result{"", false},
+				"foo.bar.universe.tf": result{"", false},
+				"goooooglexcom":       result{"", false},
 			},
 		},
 	}
@@ -42,9 +49,12 @@ google.* 3.4.5.6
 		}
 
 		for hostname, expected := range test.Tests {
-			actual := cfg.Match(hostname)
-			if expected != actual {
-				t.Errorf("cfg.Match(%q) is %q, want %q", hostname, actual, expected)
+			backend, proxy := cfg.Match(hostname)
+			if expected.backend != backend {
+				t.Errorf("cfg.Match(%q) is %q, want %q", hostname, backend, expected.backend)
+			}
+			if expected.proxy != proxy {
+				t.Errorf("cfg.Match(%q).proxy is %v, want %v", hostname, proxy, expected.proxy)
 			}
 		}
 	}
