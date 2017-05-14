@@ -26,12 +26,14 @@ type acmeCacheEntry struct {
 	expires time.Time
 }
 
+// ACME locates backends that are attempting ACME SNI-based validation.
 type ACME struct {
 	backends []string
 	// *.acme.invalid domain to cache entry
 	cache map[string]acmeCacheEntry
 }
 
+// Match returns the backend for hostname, if one is found.
 func (s *ACME) Match(hostname string) string {
 	c := s.cache[hostname]
 	if time.Now().Before(c.expires) {

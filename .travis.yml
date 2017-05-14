@@ -14,7 +14,7 @@ script:
 - go build .
 - go test .
 - go vet .
-- golint .
+- golint -set_exit_status .
 
 jobs:
   include:
