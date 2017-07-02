@@ -11,9 +11,9 @@ install:
 before_script: 
 script:
 - go get -t .
-- go build .
-- go test .
-- go vet .
+- go build ./...
+- go test ./...
+- go vet ./...
 - golint -set_exit_status .
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
         --maintainer "David Anderson <dave@natulte.net>"
         --description "TLS SNI router"
         --url "https://github.com/google/tlsrouter"
-        ./tlsrouter=/usr/bin/tlsrouter
+        ./cmd/tlsrouter/tlsrouter=/usr/bin/tlsrouter
         ./systemd/tlsrouter.service=/lib/systemd/system/tlsrouter.service
       deploy:
       - provider: packagecloud
