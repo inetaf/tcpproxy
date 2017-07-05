@@ -1,5 +1,4 @@
 language: go
-go_import_path: go.universe.tf/tcpproxy
 go:
 - 1.7
 - 1.8
@@ -23,7 +22,7 @@ jobs:
       install:
       - gem install fpm
       script:
-      - go build .
+      - go build ./cmd/tlsrouter
       - fpm -s dir -t deb -n tlsrouter -v $(date '+%Y%m%d%H%M%S')
         --license Apache2
         --vendor "David Anderson <dave@natulte.net>"
