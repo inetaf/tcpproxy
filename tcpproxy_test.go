@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"strings"
 	"testing"
@@ -266,5 +267,44 @@ func TestProxySNI(t *testing.T) {
 	}
 	if string(buf) != msg {
 		t.Fatalf("got %q; want %q", buf, msg)
+	}
+}
+
+func TestProxyPROXYOut(t *testing.T) {
+	front := newLocalListener(t)
+	defer front.Close()
+	back := newLocalListener(t)
+	defer back.Close()
+
+	p := testProxy(t, front)
+	p.AddRoute(testFrontAddr, &DialProxy{
+		Addr:                 back.Addr().String(),
+		ProxyProtocolVersion: 1,
+	})
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	toFront, err := net.Dial("tcp", front.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	io.WriteString(toFront, "foo")
+	toFront.Close()
+
+	fromProxy, err := back.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bs, err := ioutil.ReadAll(fromProxy)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := fmt.Sprintf("PROXY TCP4 %s %d %s %d\r\nfoo", toFront.LocalAddr().(*net.TCPAddr).IP, toFront.LocalAddr().(*net.TCPAddr).Port, toFront.RemoteAddr().(*net.TCPAddr).IP, toFront.RemoteAddr().(*net.TCPAddr).Port)
+	if string(bs) != want {
+		t.Fatalf("got %q; want %q", bs, want)
 	}
 }
