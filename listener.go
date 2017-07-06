@@ -48,8 +48,12 @@ type tcpAddr string
 func (a tcpAddr) Network() string { return "tcp" }
 func (a tcpAddr) String() string  { return string(a) }
 
+// Addr returns the listener's Address field as a net.Addr.
 func (tl *TargetListener) Addr() net.Addr { return tcpAddr(tl.Address) }
 
+// Close stops listening for new connections. All new connections
+// routed to this listener will be closed. Already accepted
+// connections are not closed.
 func (tl *TargetListener) Close() error {
 	tl.lock()
 	if tl.closed {
@@ -85,6 +89,7 @@ func (tl *TargetListener) HandleConn(c net.Conn) {
 	}
 }
 
+// Accept implements the Accept method in the net.Listener interface.
 func (tl *TargetListener) Accept() (net.Conn, error) {
 	tl.lock()
 	for tl.nextConn == nil && !tl.closed {

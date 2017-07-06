@@ -295,6 +295,7 @@ func UnderlyingConn(c net.Conn) net.Conn {
 	return c
 }
 
+// HandleConn implements the Target interface.
 func (dp *DialProxy) HandleConn(src net.Conn) {
 	ctx := context.Background()
 	var cancel context.CancelFunc

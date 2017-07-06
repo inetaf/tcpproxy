@@ -28,9 +28,8 @@ func TestListenerAccept(t *testing.T) {
 			if err != nil {
 				ch <- err
 				return
-			} else {
-				ch <- conn
 			}
+			ch <- conn
 		}
 	}()
 
