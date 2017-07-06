@@ -29,13 +29,19 @@ import (
 //
 // The ipPort is any valid net.Listen TCP address.
 func (p *Proxy) AddSNIRoute(ipPort, sni string, dest Target) {
-	p.addRoute(ipPort, sniMatch(sni), dest)
+	p.addRoute(ipPort, sniMatch{sni, dest})
 }
 
-type sniMatch string
+type sniMatch struct {
+	sni    string
+	target Target
+}
 
-func (sni sniMatch) match(br *bufio.Reader) bool {
-	return clientHelloServerName(br) == string(sni)
+func (m sniMatch) match(br *bufio.Reader) Target {
+	if clientHelloServerName(br) == string(m.sni) {
+		return m.target
+	}
+	return nil
 }
 
 // clientHelloServerName returns the SNI server name inside the TLS ClientHello,
