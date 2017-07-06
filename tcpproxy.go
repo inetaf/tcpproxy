@@ -69,7 +69,7 @@ import (
 // The order that routes are added in matters; each is matched in the order
 // registered.
 type Proxy struct {
-	routes map[string][]route // ip:port => routes
+	configs map[string]*config // ip:port => config
 
 	lns   []net.Listener
 	donec chan struct{} // closed before err
@@ -81,7 +81,22 @@ type Proxy struct {
 	ListenFunc func(net, laddr string) (net.Listener, error)
 }
 
+// config contains the proxying state for one listener.
+type config struct {
+	routes      []route
+	acmeTargets []Target // accumulates targets that should be probed for acme.
+	stopACME    bool     // if true, AddSNIRoute doesn't add targets to acmeTargets.
+}
+
+// A route matches a connection to a target.
 type route interface {
+	// match examines the initial bytes of a connection, looking for a
+	// match. If a match is found, match returns a non-nil Target to
+	// which the stream should be proxied. match returns nil if the
+	// connection doesn't match.
+	//
+	// match must not consume bytes from the given bufio.Reader, it
+	// can only Peek.
 	match(*bufio.Reader) Target
 }
 
@@ -92,11 +107,19 @@ func (p *Proxy) netListen() func(net, laddr string) (net.Listener, error) {
 	return net.Listen
 }
 
-func (p *Proxy) addRoute(ipPort string, r route) {
-	if p.routes == nil {
-		p.routes = make(map[string][]route)
+func (p *Proxy) configFor(ipPort string) *config {
+	if p.configs == nil {
+		p.configs = make(map[string]*config)
 	}
-	p.routes[ipPort] = append(p.routes[ipPort], r)
+	if p.configs[ipPort] == nil {
+		p.configs[ipPort] = &config{}
+	}
+	return p.configs[ipPort]
+}
+
+func (p *Proxy) addRoute(ipPort string, r route) {
+	cfg := p.configFor(ipPort)
+	cfg.routes = append(cfg.routes, r)
 }
 
 // AddRoute appends an always-matching route to the ipPort listener,
@@ -107,14 +130,14 @@ func (p *Proxy) addRoute(ipPort string, r route) {
 //
 // The ipPort is any valid net.Listen TCP address.
 func (p *Proxy) AddRoute(ipPort string, dest Target) {
-	p.addRoute(ipPort, alwaysMatch{dest})
+	p.addRoute(ipPort, fixedTarget{dest})
 }
 
-type alwaysMatch struct {
+type fixedTarget struct {
 	t Target
 }
 
-func (m alwaysMatch) match(*bufio.Reader) Target { return m.t }
+func (m fixedTarget) match(*bufio.Reader) Target { return m.t }
 
 // Run is calls Start, and then Wait.
 //
@@ -155,16 +178,16 @@ func (p *Proxy) Start() error {
 		return errors.New("already started")
 	}
 	p.donec = make(chan struct{})
-	errc := make(chan error, len(p.routes))
-	p.lns = make([]net.Listener, 0, len(p.routes))
-	for ipPort, routes := range p.routes {
+	errc := make(chan error, len(p.configs))
+	p.lns = make([]net.Listener, 0, len(p.configs))
+	for ipPort, config := range p.configs {
 		ln, err := p.netListen()("tcp", ipPort)
 		if err != nil {
 			p.Close()
 			return err
 		}
 		p.lns = append(p.lns, ln)
-		go p.serveListener(errc, ln, routes)
+		go p.serveListener(errc, ln, config.routes)
 	}
 	go p.awaitFirstError(errc)
 	return nil
