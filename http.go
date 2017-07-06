@@ -27,13 +27,19 @@ import (
 //
 // The ipPort is any valid net.Listen TCP address.
 func (p *Proxy) AddHTTPHostRoute(ipPort, httpHost string, dest Target) {
-	p.addRoute(ipPort, httpHostMatch(httpHost), dest)
+	p.addRoute(ipPort, httpHostMatch{httpHost, dest})
 }
 
-type httpHostMatch string
+type httpHostMatch struct {
+	host   string
+	target Target
+}
 
-func (host httpHostMatch) match(br *bufio.Reader) bool {
-	return httpHostHeader(br) == string(host)
+func (m httpHostMatch) match(br *bufio.Reader) Target {
+	if httpHostHeader(br) == m.host {
+		return m.target
+	}
+	return nil
 }
 
 // httpHostHeader returns the HTTP Host header from br without

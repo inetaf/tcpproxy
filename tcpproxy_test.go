@@ -27,6 +27,10 @@ import (
 	"testing"
 )
 
+type noopTarget struct{}
+
+func (t *noopTarget) HandleConn(net.Conn) {}
+
 func TestMatchHTTPHost(t *testing.T) {
 	tests := []struct {
 		name string
@@ -53,6 +57,7 @@ func TestMatchHTTPHost(t *testing.T) {
 			want: true,
 		},
 	}
+	target := &noopTarget{}
 	for i, tt := range tests {
 		name := tt.name
 		if name == "" {
@@ -60,8 +65,8 @@ func TestMatchHTTPHost(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			br := bufio.NewReader(tt.r)
-			var matcher matcher = httpHostMatch(tt.host)
-			got := matcher.match(br)
+			r := httpHostMatch{tt.host, target}
+			got := r.match(br) != nil
 			if got != tt.want {
 				t.Fatalf("match = %v; want %v", got, tt.want)
 			}

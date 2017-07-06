@@ -69,7 +69,7 @@ import (
 // The order that routes are added in matters; each is matched in the order
 // registered.
 type Proxy struct {
-	routes map[string][]route // ip:port => route
+	routes map[string][]route // ip:port => routes
 
 	lns   []net.Listener
 	donec chan struct{} // closed before err
@@ -81,13 +81,8 @@ type Proxy struct {
 	ListenFunc func(net, laddr string) (net.Listener, error)
 }
 
-type route struct {
-	matcher matcher
-	target  Target
-}
-
-type matcher interface {
-	match(*bufio.Reader) bool
+type route interface {
+	match(*bufio.Reader) Target
 }
 
 func (p *Proxy) netListen() func(net, laddr string) (net.Listener, error) {
@@ -97,11 +92,11 @@ func (p *Proxy) netListen() func(net, laddr string) (net.Listener, error) {
 	return net.Listen
 }
 
-func (p *Proxy) addRoute(ipPort string, matcher matcher, dest Target) {
+func (p *Proxy) addRoute(ipPort string, r route) {
 	if p.routes == nil {
 		p.routes = make(map[string][]route)
 	}
-	p.routes[ipPort] = append(p.routes[ipPort], route{matcher, dest})
+	p.routes[ipPort] = append(p.routes[ipPort], r)
 }
 
 // AddRoute appends an always-matching route to the ipPort listener,
@@ -112,12 +107,14 @@ func (p *Proxy) addRoute(ipPort string, matcher matcher, dest Target) {
 //
 // The ipPort is any valid net.Listen TCP address.
 func (p *Proxy) AddRoute(ipPort string, dest Target) {
-	p.addRoute(ipPort, alwaysMatch{}, dest)
+	p.addRoute(ipPort, alwaysMatch{dest})
 }
 
-type alwaysMatch struct{}
+type alwaysMatch struct {
+	t Target
+}
 
-func (alwaysMatch) match(*bufio.Reader) bool { return true }
+func (m alwaysMatch) match(*bufio.Reader) Target { return m.t }
 
 // Run is calls Start, and then Wait.
 //
@@ -194,7 +191,7 @@ func (p *Proxy) serveListener(ret chan<- error, ln net.Listener, routes []route)
 func (p *Proxy) serveConn(c net.Conn, routes []route) bool {
 	br := bufio.NewReader(c)
 	for _, route := range routes {
-		if route.matcher.match(br) {
+		if target := route.match(br); target != nil {
 			if n := br.Buffered(); n > 0 {
 				peeked, _ := br.Peek(br.Buffered())
 				c = &Conn{
@@ -202,7 +199,7 @@ func (p *Proxy) serveConn(c net.Conn, routes []route) bool {
 					Conn:   c,
 				}
 			}
-			route.target.HandleConn(c)
+			target.HandleConn(c)
 			return true
 		}
 	}
