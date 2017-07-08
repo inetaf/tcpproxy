@@ -24,10 +24,10 @@ import (
 	"strings"
 )
 
-// AddSNIRoute appends a route to the ipPort listener that says if the
-// incoming TLS SNI server name is sni, the connection is given to
-// dest. If it doesn't match, rule processing continues for any
-// additional routes on ipPort.
+// AddSNIRoute appends a route to the ipPort listener that routes to
+// dest if the incoming TLS SNI server name is sni. If it doesn't
+// match, rule processing continues for any additional routes on
+// ipPort.
 //
 // By default, the proxy will route all ACME tls-sni-01 challenges
 // received on ipPort to all SNI dests. You can disable ACME routing
@@ -35,6 +35,20 @@ import (
 //
 // The ipPort is any valid net.Listen TCP address.
 func (p *Proxy) AddSNIRoute(ipPort, sni string, dest Target) {
+	p.AddSNIMatchRoute(ipPort, equals(sni), dest)
+}
+
+// AddSNIMatchRoute appends a route to the ipPort listener that routes
+// to dest if the incoming TLS SNI server name is accepted by
+// matcher. If it doesn't match, rule processing continues for any
+// additional routes on ipPort.
+//
+// By default, the proxy will route all ACME tls-sni-01 challenges
+// received on ipPort to all SNI dests. You can disable ACME routing
+// with AddStopACMESearch.
+//
+// The ipPort is any valid net.Listen TCP address.
+func (p *Proxy) AddSNIMatchRoute(ipPort string, matcher Matcher, dest Target) {
 	cfg := p.configFor(ipPort)
 	if !cfg.stopACME {
 		if len(cfg.acmeTargets) == 0 {
@@ -43,7 +57,7 @@ func (p *Proxy) AddSNIRoute(ipPort, sni string, dest Target) {
 		cfg.acmeTargets = append(cfg.acmeTargets, dest)
 	}
 
-	p.addRoute(ipPort, sniMatch{sni, dest})
+	p.addRoute(ipPort, sniMatch{matcher, dest})
 }
 
 // AddStopACMESearch prevents ACME probing of subsequent SNI routes.
@@ -55,12 +69,12 @@ func (p *Proxy) AddStopACMESearch(ipPort string) {
 }
 
 type sniMatch struct {
-	sni    string
-	target Target
+	matcher Matcher
+	target  Target
 }
 
 func (m sniMatch) match(br *bufio.Reader) Target {
-	if clientHelloServerName(br) == string(m.sni) {
+	if m.matcher(context.TODO(), clientHelloServerName(br)) {
 		return m.target
 	}
 	return nil

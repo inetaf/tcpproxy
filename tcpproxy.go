@@ -81,6 +81,16 @@ type Proxy struct {
 	ListenFunc func(net, laddr string) (net.Listener, error)
 }
 
+// Matcher reports whether hostname matches the Matcher's criteria.
+type Matcher func(ctx context.Context, hostname string) bool
+
+// equals is a trivial Matcher that implements string equality.
+func equals(want string) Matcher {
+	return func(_ context.Context, got string) bool {
+		return want == got
+	}
+}
+
 // config contains the proxying state for one listener.
 type config struct {
 	routes      []route
