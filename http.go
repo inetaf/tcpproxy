@@ -17,26 +17,37 @@ package tcpproxy
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"net/http"
 )
 
-// AddHTTPHostRoute appends a route to the ipPort listener that says
-// if the incoming HTTP/1.x Host header name is httpHost, the
-// connection is given to dest. If it doesn't match, rule processing
-// continues for any additional routes on ipPort.
+// AddHTTPHostRoute appends a route to the ipPort listener that
+// routes to dest if the incoming HTTP/1.x Host header name is
+// httpHost. If it doesn't match, rule processing continues for any
+// additional routes on ipPort.
 //
 // The ipPort is any valid net.Listen TCP address.
 func (p *Proxy) AddHTTPHostRoute(ipPort, httpHost string, dest Target) {
-	p.addRoute(ipPort, httpHostMatch{httpHost, dest})
+	p.AddHTTPHostMatchRoute(ipPort, equals(httpHost), dest)
+}
+
+// AddHTTPHostMatchRoute appends a route to the ipPort listener that
+// routes to dest if the incoming HTTP/1.x Host header name is
+// accepted by matcher. If it doesn't match, rule processing continues
+// for any additional routes on ipPort.
+//
+// The ipPort is any valid net.Listen TCP address.
+func (p *Proxy) AddHTTPHostMatchRoute(ipPort string, match Matcher, dest Target) {
+	p.addRoute(ipPort, httpHostMatch{match, dest})
 }
 
 type httpHostMatch struct {
-	host   string
-	target Target
+	matcher Matcher
+	target  Target
 }
 
 func (m httpHostMatch) match(br *bufio.Reader) Target {
-	if httpHostHeader(br) == m.host {
+	if m.matcher(context.TODO(), httpHostHeader(br)) {
 		return m.target
 	}
 	return nil
