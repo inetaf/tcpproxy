@@ -34,8 +34,8 @@ import (
 // with AddStopACMESearch.
 //
 // The ipPort is any valid net.Listen TCP address.
-func (p *Proxy) AddSNIRoute(ipPort, sni string, dest Target) {
-	p.AddSNIMatchRoute(ipPort, equals(sni), dest)
+func (p *Proxy) AddSNIRoute(ipPort, sni string, dest Target) (routeId int) {
+	return p.AddSNIMatchRoute(ipPort, equals(sni), dest)
 }
 
 // AddSNIMatchRoute appends a route to the ipPort listener that routes
@@ -48,7 +48,7 @@ func (p *Proxy) AddSNIRoute(ipPort, sni string, dest Target) {
 // with AddStopACMESearch.
 //
 // The ipPort is any valid net.Listen TCP address.
-func (p *Proxy) AddSNIMatchRoute(ipPort string, matcher Matcher, dest Target) {
+func (p *Proxy) AddSNIMatchRoute(ipPort string, matcher Matcher, dest Target) (routeId int) {
 	cfg := p.configFor(ipPort)
 	if !cfg.stopACME {
 		if len(cfg.acmeTargets) == 0 {
@@ -56,8 +56,7 @@ func (p *Proxy) AddSNIMatchRoute(ipPort string, matcher Matcher, dest Target) {
 		}
 		cfg.acmeTargets = append(cfg.acmeTargets, dest)
 	}
-
-	p.addRoute(ipPort, sniMatch{matcher, dest})
+	return p.addRoute(ipPort, sniMatch{matcher, dest})
 }
 
 // AddStopACMESearch prevents ACME probing of subsequent SNI routes.
