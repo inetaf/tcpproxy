@@ -94,7 +94,7 @@ func equals(want string) Matcher {
 
 // config contains the proxying state for one listener.
 type config struct {
-	sync.Mutex  // protect r/w of routes
+	sync.Mutex  // protect w of routes
 	nextRouteId int
 	routes      map[int]route
 	acmeTargets []Target // accumulates targets that should be probed for acme.
@@ -104,6 +104,7 @@ type config struct {
 func NewConfig() (cfg *config) {
 	cfg = &config{}
 	cfg.routes = make(map[int]route)
+	cfg.nextRouteId = 1
 	return
 }
 
@@ -137,18 +138,28 @@ func (p *Proxy) configFor(ipPort string) *config {
 }
 
 func (p *Proxy) addRoute(ipPort string, r route) (routeId int) {
-	cfg := p.configFor(ipPort)
-	cfg.Lock()
-	defer cfg.Unlock()
-	routeId = cfg.nextRouteId
-	cfg.nextRouteId++
-	cfg.routes[routeId] = r
+	var cfg *config
+	if p.donec != nil {
+		// NOTE: Do not create config file if the server is listening.
+		// This saves the handling of bringing up and tearing down
+		// listeners when add or remove route.
+		cfg = p.configs[ipPort]
+	} else {
+		cfg = p.configFor(ipPort)
+	}
+	if cfg != nil {
+		cfg.Lock()
+		routeId = cfg.nextRouteId
+		cfg.nextRouteId++
+		cfg.routes[routeId] = r
+		cfg.Unlock()
+	}
 	return
 }
 
 // AddRoute appends an always-matching route to the ipPort listener,
 // directing any connection to dest. The added route's id is returned
-// for future removal.
+// for future removal. If routeId is zero, the route is not registered.
 //
 // This is generally used as either the only rule (for simple TCP
 // proxies), or as the final fallback rule for an ipPort.
@@ -164,9 +175,7 @@ func (p *Proxy) AddRoute(ipPort string, dest Target) (routeId int) {
 // Both AddRoute and RemoveRoute is go-routine safe.
 func (p *Proxy) RemoveRoute(ipPort string, routeId int) (err error) {
 	cfg := p.configFor(ipPort)
-	cfg.Lock()
-	defer cfg.Unlock()
-	delete(cfg.routes, routeId)
+	cfg.routes[routeId] = nil
 	return
 }
 
@@ -250,9 +259,10 @@ func (p *Proxy) serveListener(ret chan<- error, ln net.Listener, cfg *config) {
 // It returns whether it matched purely for testing.
 func (p *Proxy) serveConn(c net.Conn, cfg *config) bool {
 	br := bufio.NewReader(c)
-	cfg.Lock()
-	defer cfg.Unlock()
 	for _, route := range cfg.routes {
+		if route == nil {
+			continue
+		}
 		if target := route.match(br); target != nil {
 			if n := br.Buffered(); n > 0 {
 				peeked, _ := br.Peek(br.Buffered())
