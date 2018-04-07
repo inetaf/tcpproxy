@@ -169,6 +169,26 @@ func testProxy(t *testing.T, front net.Listener) *Proxy {
 	}
 }
 
+func testRouteToBackendWithExpected(t *testing.T, front net.Conn, back net.Listener, msg string, expected string) {
+        io.WriteString(front, msg)
+        fromProxy, err := back.Accept()
+        if err != nil {
+                t.Fatal(err)
+        }
+
+        buf := make([]byte, len(msg))
+        if _, err := io.ReadFull(fromProxy, buf); err != nil {
+                t.Fatal(err)
+        }
+        if string(buf) != expected {
+                t.Fatalf("got %q; want %q", buf, expected)
+        }
+}
+
+func testRouteToBackend(t *testing.T, front net.Conn, back net.Listener, msg string) {
+        testRouteToBackendWithExpected(t, front, back, msg, msg)
+}
+
 func TestProxyAlwaysMatch(t *testing.T) {
 	front := newLocalListener(t)
 	defer front.Close()
@@ -187,20 +207,7 @@ func TestProxyAlwaysMatch(t *testing.T) {
 	}
 	defer toFront.Close()
 
-	fromProxy, err := back.Accept()
-	if err != nil {
-		t.Fatal(err)
-	}
-	const msg = "message"
-	io.WriteString(toFront, msg)
-
-	buf := make([]byte, len(msg))
-	if _, err := io.ReadFull(fromProxy, buf); err != nil {
-		t.Fatal(err)
-	}
-	if string(buf) != msg {
-		t.Fatalf("got %q; want %q", buf, msg)
-	}
+        testRouteToBackend(t, toFront, back, "message")
 }
 
 func TestProxyHTTP(t *testing.T) {
@@ -226,20 +233,7 @@ func TestProxyHTTP(t *testing.T) {
 	defer toFront.Close()
 
 	const msg = "GET / HTTP/1.1\r\nHost: bar.com\r\n\r\n"
-	io.WriteString(toFront, msg)
-
-	fromProxy, err := backBar.Accept()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	buf := make([]byte, len(msg))
-	if _, err := io.ReadFull(fromProxy, buf); err != nil {
-		t.Fatal(err)
-	}
-	if string(buf) != msg {
-		t.Fatalf("got %q; want %q", buf, msg)
-	}
+        testRouteToBackend(t, toFront, backBar, msg)
 }
 
 func TestProxySNI(t *testing.T) {
@@ -264,6 +258,9 @@ func TestProxySNI(t *testing.T) {
 	}
 	defer toFront.Close()
 
+        msg := clientHelloRecord(t, "bar.com")
+        testRouteToBackend(t, toFront, backBar, msg)
+}
 	msg := clientHelloRecord(t, "bar.com")
 	io.WriteString(toFront, msg)
 
@@ -301,23 +298,8 @@ func TestProxyPROXYOut(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	io.WriteString(toFront, "foo")
-	toFront.Close()
-
-	fromProxy, err := back.Accept()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	bs, err := ioutil.ReadAll(fromProxy)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	want := fmt.Sprintf("PROXY TCP4 %s %d %s %d\r\nfoo", toFront.LocalAddr().(*net.TCPAddr).IP, toFront.LocalAddr().(*net.TCPAddr).Port, toFront.RemoteAddr().(*net.TCPAddr).IP, toFront.RemoteAddr().(*net.TCPAddr).Port)
-	if string(bs) != want {
-		t.Fatalf("got %q; want %q", bs, want)
-	}
+        testRouteToBackendWithExpected(t, toFront, back, "foo", want)
 }
 
 type tlsServer struct {
