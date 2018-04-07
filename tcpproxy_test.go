@@ -169,24 +169,75 @@ func testProxy(t *testing.T, front net.Listener) *Proxy {
 	}
 }
 
-func testRouteToBackendWithExpected(t *testing.T, front net.Conn, back net.Listener, msg string, expected string) {
-        io.WriteString(front, msg)
-        fromProxy, err := back.Accept()
-        if err != nil {
-                t.Fatal(err)
-        }
+func testRouteToBackendWithExpected(t *testing.T, toFront net.Conn, back net.Listener, msg string, expected string) {
+	io.WriteString(toFront, msg)
+	fromProxy, err := back.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-        buf := make([]byte, len(msg))
-        if _, err := io.ReadFull(fromProxy, buf); err != nil {
-                t.Fatal(err)
-        }
-        if string(buf) != expected {
-                t.Fatalf("got %q; want %q", buf, expected)
-        }
+	buf := make([]byte, len(expected))
+	if _, err := io.ReadFull(fromProxy, buf); err != nil {
+		t.Fatal(err)
+	}
+	if string(buf) != expected {
+		t.Fatalf("got %q; want %q", buf, expected)
+	}
 }
 
-func testRouteToBackend(t *testing.T, front net.Conn, back net.Listener, msg string) {
-        testRouteToBackendWithExpected(t, front, back, msg, msg)
+func testRouteToBackend(t *testing.T, front net.Listener, back net.Listener, msg string) {
+	toFront, err := net.Dial("tcp", front.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer toFront.Close()
+
+	testRouteToBackendWithExpected(t, toFront, back, msg, msg)
+}
+
+// test the backend is not receiving traffic
+func testNotRouteToBackend(t *testing.T, front net.Listener, back net.Listener, msg string) <-chan bool {
+	done := make(chan bool)
+	toFront, err := net.Dial("tcp", front.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer toFront.Close()
+
+	timeC := time.NewTimer(10 * time.Millisecond).C
+	acceptC := make(chan struct{})
+	go func() {
+		io.WriteString(toFront, msg)
+		fromProxy, err := back.Accept()
+		acceptC <- struct{}{}
+		{
+			if err == nil {
+				buf := make([]byte, len(msg))
+				if _, err := io.ReadFull(fromProxy, buf); err != nil {
+					t.Fatal(err)
+				}
+				t.Fatalf("Expect backend to not receive message, but found %s", string(buf))
+			}
+			err, ok := err.(net.Error)
+			if !ok || !err.Timeout() {
+				t.Fatalf("Expect backend to timeout, but found err: %v", err)
+			}
+		}
+	}()
+	go func() {
+		select {
+		case <-timeC:
+			{
+				done <- true
+			}
+		case <-acceptC:
+			{
+				t.Fatal("Expect backend to not receive message")
+				done <- true
+			}
+		}
+	}()
+	return done
 }
 
 func TestProxyAlwaysMatch(t *testing.T) {
@@ -201,13 +252,7 @@ func TestProxyAlwaysMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	toFront, err := net.Dial("tcp", front.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer toFront.Close()
-
-        testRouteToBackend(t, toFront, back, "message")
+	testRouteToBackend(t, front, back, "message")
 }
 
 func TestProxyHTTP(t *testing.T) {
@@ -226,14 +271,9 @@ func TestProxyHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	toFront, err := net.Dial("tcp", front.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer toFront.Close()
-
-	const msg = "GET / HTTP/1.1\r\nHost: bar.com\r\n\r\n"
-        testRouteToBackend(t, toFront, backBar, msg)
+	testRouteToBackend(t, front, backBar, "GET / HTTP/1.1\r\nHost: bar.com\r\n\r\n")
+	<-testNotRouteToBackend(t, front, backBar, "GET / HTTP/1.1\r\nHost: boo.com\r\n\r\n")
+	testRouteToBackend(t, front, backFoo, "GET / HTTP/1.1\r\nHost: foo.com\r\n\r\n")
 }
 
 func TestProxySNI(t *testing.T) {
@@ -252,30 +292,32 @@ func TestProxySNI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	toFront, err := net.Dial("tcp", front.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer toFront.Close()
-
-        msg := clientHelloRecord(t, "bar.com")
-        testRouteToBackend(t, toFront, backBar, msg)
+	testRouteToBackend(t, front, backBar, clientHelloRecord(t, "bar.com"))
+	<-testNotRouteToBackend(t, front, backBar, clientHelloRecord(t, "foo.com"))
+	testRouteToBackend(t, front, backFoo, clientHelloRecord(t, "foo.com"))
 }
+
+func TestProxyRemoveRoute(t *testing.T) {
+	front := newLocalListener(t)
+	defer front.Close()
+	p := testProxy(t, front)
+
+	// NOTE: Needs to register testFrontAddr before server starts
+	p.AddSNIRoute(testFrontAddr, "unused.com", noopTarget{})
+
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	backBar := newLocalListener(t)
+	defer backBar.Close()
+	routeId := p.AddSNIRoute(testFrontAddr, "bar.com", To(backBar.Addr().String()))
+
 	msg := clientHelloRecord(t, "bar.com")
-	io.WriteString(toFront, msg)
+	testRouteToBackend(t, front, backBar, msg)
 
-	fromProxy, err := backBar.Accept()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	buf := make([]byte, len(msg))
-	if _, err := io.ReadFull(fromProxy, buf); err != nil {
-		t.Fatal(err)
-	}
-	if string(buf) != msg {
-		t.Fatalf("got %q; want %q", buf, msg)
-	}
+	p.RemoveRoute(testFrontAddr, routeId)
+	<-testNotRouteToBackend(t, front, backBar, msg)
 }
 
 func TestProxyPROXYOut(t *testing.T) {
@@ -299,7 +341,7 @@ func TestProxyPROXYOut(t *testing.T) {
 	}
 
 	want := fmt.Sprintf("PROXY TCP4 %s %d %s %d\r\nfoo", toFront.LocalAddr().(*net.TCPAddr).IP, toFront.LocalAddr().(*net.TCPAddr).Port, toFront.RemoteAddr().(*net.TCPAddr).IP, toFront.RemoteAddr().(*net.TCPAddr).Port)
-        testRouteToBackendWithExpected(t, toFront, back, "foo", want)
+	testRouteToBackendWithExpected(t, toFront, back, "foo", want)
 }
 
 type tlsServer struct {
