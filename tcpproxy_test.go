@@ -311,12 +311,12 @@ func TestProxyRemoveRoute(t *testing.T) {
 
 	backBar := newLocalListener(t)
 	defer backBar.Close()
-	routeId := p.AddSNIRoute(testFrontAddr, "bar.com", To(backBar.Addr().String()))
+	routeID := p.AddSNIRoute(testFrontAddr, "bar.com", To(backBar.Addr().String()))
 
 	msg := clientHelloRecord(t, "bar.com")
 	testRouteToBackend(t, front, backBar, msg)
 
-	p.RemoveRoute(testFrontAddr, routeId)
+	p.RemoveRoute(testFrontAddr, routeID)
 	<-testNotRouteToBackend(t, front, backBar, msg)
 }
 

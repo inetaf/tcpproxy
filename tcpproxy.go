@@ -95,16 +95,16 @@ func equals(want string) Matcher {
 // config contains the proxying state for one listener.
 type config struct {
 	sync.Mutex  // protect w of routes
-	nextRouteId int
+	nextRouteID int
 	routes      map[int]route
 	acmeTargets []Target // accumulates targets that should be probed for acme.
 	stopACME    bool     // if true, AddSNIRoute doesn't add targets to acmeTargets.
 }
 
-func NewConfig() (cfg *config) {
+func newConfig() (cfg *config) {
 	cfg = &config{}
 	cfg.routes = make(map[int]route)
-	cfg.nextRouteId = 1
+	cfg.nextRouteID = 1
 	return
 }
 
@@ -132,12 +132,12 @@ func (p *Proxy) configFor(ipPort string) *config {
 		p.configs = make(map[string]*config)
 	}
 	if p.configs[ipPort] == nil {
-		p.configs[ipPort] = NewConfig()
+		p.configs[ipPort] = newConfig()
 	}
 	return p.configs[ipPort]
 }
 
-func (p *Proxy) addRoute(ipPort string, r route) (routeId int) {
+func (p *Proxy) addRoute(ipPort string, r route) (routeID int) {
 	var cfg *config
 	if p.donec != nil {
 		// NOTE: Do not create config file if the server is listening.
@@ -149,9 +149,9 @@ func (p *Proxy) addRoute(ipPort string, r route) (routeId int) {
 	}
 	if cfg != nil {
 		cfg.Lock()
-		routeId = cfg.nextRouteId
-		cfg.nextRouteId++
-		cfg.routes[routeId] = r
+		routeID = cfg.nextRouteID
+		cfg.nextRouteID++
+		cfg.routes[routeID] = r
 		cfg.Unlock()
 	}
 	return
@@ -159,13 +159,13 @@ func (p *Proxy) addRoute(ipPort string, r route) (routeId int) {
 
 // AddRoute appends an always-matching route to the ipPort listener,
 // directing any connection to dest. The added route's id is returned
-// for future removal. If routeId is zero, the route is not registered.
+// for future removal. If routeID is zero, the route is not registered.
 //
 // This is generally used as either the only rule (for simple TCP
 // proxies), or as the final fallback rule for an ipPort.
 //
 // The ipPort is any valid net.Listen TCP address.
-func (p *Proxy) AddRoute(ipPort string, dest Target) (routeId int) {
+func (p *Proxy) AddRoute(ipPort string, dest Target) (routeID int) {
 	return p.addRoute(ipPort, fixedTarget{dest})
 }
 
@@ -173,9 +173,9 @@ func (p *Proxy) AddRoute(ipPort string, dest Target) (routeId int) {
 // not found, this is an no-op.
 //
 // Both AddRoute and RemoveRoute is go-routine safe.
-func (p *Proxy) RemoveRoute(ipPort string, routeId int) (err error) {
+func (p *Proxy) RemoveRoute(ipPort string, routeID int) (err error) {
 	cfg := p.configFor(ipPort)
-	cfg.routes[routeId] = nil
+	cfg.routes[routeID] = nil
 	return
 }
 

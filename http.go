@@ -37,7 +37,7 @@ func (p *Proxy) AddHTTPHostRoute(ipPort, httpHost string, dest Target) {
 // for any additional routes on ipPort.
 //
 // The ipPort is any valid net.Listen TCP address.
-func (p *Proxy) AddHTTPHostMatchRoute(ipPort string, match Matcher, dest Target) (routeId int) {
+func (p *Proxy) AddHTTPHostMatchRoute(ipPort string, match Matcher, dest Target) (routeID int) {
 	return p.addRoute(ipPort, httpHostMatch{match, dest})
 }
 
