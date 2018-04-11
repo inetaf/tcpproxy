@@ -95,17 +95,11 @@ func equals(want string) Matcher {
 // config contains the proxying state for one listener.
 type config struct {
 	sync.Mutex  // protect w of routes
-	nextRouteID int
 	routes      map[int]route
+	nextRouteID int
+
 	acmeTargets []Target // accumulates targets that should be probed for acme.
 	stopACME    bool     // if true, AddSNIRoute doesn't add targets to acmeTargets.
-}
-
-func newConfig() (cfg *config) {
-	cfg = &config{}
-	cfg.routes = make(map[int]route)
-	cfg.nextRouteID = 1
-	return
 }
 
 // A route matches a connection to a target.
@@ -132,7 +126,10 @@ func (p *Proxy) configFor(ipPort string) *config {
 		p.configs = make(map[string]*config)
 	}
 	if p.configs[ipPort] == nil {
-		p.configs[ipPort] = newConfig()
+		cfg := &config{}
+		cfg.routes = make(map[int]route)
+		cfg.nextRouteID = 1
+		p.configs[ipPort] = cfg
 	}
 	return p.configs[ipPort]
 }
@@ -173,10 +170,9 @@ func (p *Proxy) AddRoute(ipPort string, dest Target) (routeID int) {
 // not found, this is an no-op.
 //
 // Both AddRoute and RemoveRoute is go-routine safe.
-func (p *Proxy) RemoveRoute(ipPort string, routeID int) (err error) {
+func (p *Proxy) RemoveRoute(ipPort string, routeID int) {
 	cfg := p.configFor(ipPort)
 	cfg.routes[routeID] = nil
-	return
 }
 
 type fixedTarget struct {
