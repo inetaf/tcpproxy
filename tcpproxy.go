@@ -94,8 +94,7 @@ func equals(want string) Matcher {
 
 // config contains the proxying state for one listener.
 type config struct {
-	sync.Mutex  // protect w of routes
-	routes      map[int]route
+	routes      *sync.Map // map[int]route
 	nextRouteID int
 
 	acmeTargets []Target // accumulates targets that should be probed for acme.
@@ -127,7 +126,7 @@ func (p *Proxy) configFor(ipPort string) *config {
 	}
 	if p.configs[ipPort] == nil {
 		cfg := &config{}
-		cfg.routes = make(map[int]route)
+		cfg.routes = &sync.Map{}
 		cfg.nextRouteID = 1
 		p.configs[ipPort] = cfg
 	}
@@ -145,11 +144,9 @@ func (p *Proxy) addRoute(ipPort string, r route) (routeID int) {
 		cfg = p.configFor(ipPort)
 	}
 	if cfg != nil {
-		cfg.Lock()
 		routeID = cfg.nextRouteID
 		cfg.nextRouteID++
-		cfg.routes[routeID] = r
-		cfg.Unlock()
+		cfg.routes.Store(routeID, r)
 	}
 	return
 }
@@ -172,7 +169,7 @@ func (p *Proxy) AddRoute(ipPort string, dest Target) (routeID int) {
 // Both AddRoute and RemoveRoute is go-routine safe.
 func (p *Proxy) RemoveRoute(ipPort string, routeID int) {
 	cfg := p.configFor(ipPort)
-	cfg.routes[routeID] = nil
+	cfg.routes.Delete(routeID)
 }
 
 type fixedTarget struct {
@@ -255,10 +252,9 @@ func (p *Proxy) serveListener(ret chan<- error, ln net.Listener, cfg *config) {
 // It returns whether it matched purely for testing.
 func (p *Proxy) serveConn(c net.Conn, cfg *config) bool {
 	br := bufio.NewReader(c)
-	for _, route := range cfg.routes {
-		if route == nil {
-			continue
-		}
+	var handled bool
+	cfg.routes.Range(func(k, v interface{}) bool {
+		route := v.(route)
 		if target := route.match(br); target != nil {
 			if n := br.Buffered(); n > 0 {
 				peeked, _ := br.Peek(br.Buffered())
@@ -268,13 +264,17 @@ func (p *Proxy) serveConn(c net.Conn, cfg *config) bool {
 				}
 			}
 			target.HandleConn(c)
-			return true
+			handled = true
+			return false // exit the iteration
 		}
+		return true
+	})
+	if !handled {
+		// TODO: hook for this?
+		log.Printf("tcpproxy: no routes matched conn %v/%v; closing", c.RemoteAddr().String(), c.LocalAddr().String())
+		c.Close()
 	}
-	// TODO: hook for this?
-	log.Printf("tcpproxy: no routes matched conn %v/%v; closing", c.RemoteAddr().String(), c.LocalAddr().String())
-	c.Close()
-	return false
+	return handled
 }
 
 // Conn is an incoming connection that has had some bytes read from it
