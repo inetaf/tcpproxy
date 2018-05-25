@@ -60,6 +60,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -93,7 +94,9 @@ func equals(want string) Matcher {
 
 // config contains the proxying state for one listener.
 type config struct {
-	routes      []route
+	routes      *sync.Map // map[int]route
+	nextRouteID int
+
 	acmeTargets []Target // accumulates targets that should be probed for acme.
 	stopACME    bool     // if true, AddSNIRoute doesn't add targets to acmeTargets.
 }
@@ -122,25 +125,51 @@ func (p *Proxy) configFor(ipPort string) *config {
 		p.configs = make(map[string]*config)
 	}
 	if p.configs[ipPort] == nil {
-		p.configs[ipPort] = &config{}
+		cfg := &config{}
+		cfg.routes = &sync.Map{}
+		cfg.nextRouteID = 1
+		p.configs[ipPort] = cfg
 	}
 	return p.configs[ipPort]
 }
 
-func (p *Proxy) addRoute(ipPort string, r route) {
-	cfg := p.configFor(ipPort)
-	cfg.routes = append(cfg.routes, r)
+func (p *Proxy) addRoute(ipPort string, r route) (routeID int) {
+	var cfg *config
+	if p.donec != nil {
+		// NOTE: Do not create config file if the server is listening.
+		// This saves the handling of bringing up and tearing down
+		// listeners when add or remove route.
+		cfg = p.configs[ipPort]
+	} else {
+		cfg = p.configFor(ipPort)
+	}
+	if cfg != nil {
+		routeID = cfg.nextRouteID
+		cfg.nextRouteID++
+		cfg.routes.Store(routeID, r)
+	}
+	return
 }
 
 // AddRoute appends an always-matching route to the ipPort listener,
-// directing any connection to dest.
+// directing any connection to dest. The added route's id is returned
+// for future removal. If routeID is zero, the route is not registered.
 //
 // This is generally used as either the only rule (for simple TCP
 // proxies), or as the final fallback rule for an ipPort.
 //
 // The ipPort is any valid net.Listen TCP address.
-func (p *Proxy) AddRoute(ipPort string, dest Target) {
-	p.addRoute(ipPort, fixedTarget{dest})
+func (p *Proxy) AddRoute(ipPort string, dest Target) (routeID int) {
+	return p.addRoute(ipPort, fixedTarget{dest})
+}
+
+// RemoveRoute removes an existing route for ipPort. If the route is
+// not found, this is an no-op.
+//
+// Both AddRoute and RemoveRoute is go-routine safe.
+func (p *Proxy) RemoveRoute(ipPort string, routeID int) {
+	cfg := p.configFor(ipPort)
+	cfg.routes.Delete(routeID)
 }
 
 type fixedTarget struct {
@@ -197,7 +226,7 @@ func (p *Proxy) Start() error {
 			return err
 		}
 		p.lns = append(p.lns, ln)
-		go p.serveListener(errc, ln, config.routes)
+		go p.serveListener(errc, ln, config)
 	}
 	go p.awaitFirstError(errc)
 	return nil
@@ -208,22 +237,24 @@ func (p *Proxy) awaitFirstError(errc <-chan error) {
 	close(p.donec)
 }
 
-func (p *Proxy) serveListener(ret chan<- error, ln net.Listener, routes []route) {
+func (p *Proxy) serveListener(ret chan<- error, ln net.Listener, cfg *config) {
 	for {
 		c, err := ln.Accept()
 		if err != nil {
 			ret <- err
 			return
 		}
-		go p.serveConn(c, routes)
+		go p.serveConn(c, cfg)
 	}
 }
 
 // serveConn runs in its own goroutine and matches c against routes.
 // It returns whether it matched purely for testing.
-func (p *Proxy) serveConn(c net.Conn, routes []route) bool {
+func (p *Proxy) serveConn(c net.Conn, cfg *config) bool {
 	br := bufio.NewReader(c)
-	for _, route := range routes {
+	var handled bool
+	cfg.routes.Range(func(k, v interface{}) bool {
+		route := v.(route)
 		if target := route.match(br); target != nil {
 			if n := br.Buffered(); n > 0 {
 				peeked, _ := br.Peek(br.Buffered())
@@ -233,13 +264,17 @@ func (p *Proxy) serveConn(c net.Conn, routes []route) bool {
 				}
 			}
 			target.HandleConn(c)
-			return true
+			handled = true
+			return false // exit the iteration
 		}
+		return true
+	})
+	if !handled {
+		// TODO: hook for this?
+		log.Printf("tcpproxy: no routes matched conn %v/%v; closing", c.RemoteAddr().String(), c.LocalAddr().String())
+		c.Close()
 	}
-	// TODO: hook for this?
-	log.Printf("tcpproxy: no routes matched conn %v/%v; closing", c.RemoteAddr().String(), c.LocalAddr().String())
-	c.Close()
-	return false
+	return handled
 }
 
 // Conn is an incoming connection that has had some bytes read from it
