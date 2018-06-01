@@ -73,11 +73,12 @@ type sniMatch struct {
 	target  Target
 }
 
-func (m sniMatch) match(br *bufio.Reader) Target {
-	if m.matcher(context.TODO(), clientHelloServerName(br)) {
-		return m.target
+func (m sniMatch) match(br *bufio.Reader) (Target, string) {
+	sni := clientHelloServerName(br)
+	if m.matcher(context.TODO(), sni) {
+		return m.target, sni
 	}
-	return nil
+	return nil, ""
 }
 
 // acmeMatch matches "*.acme.invalid" ACME tls-sni-01 challenges and
@@ -87,10 +88,10 @@ type acmeMatch struct {
 	cfg *config
 }
 
-func (m *acmeMatch) match(br *bufio.Reader) Target {
+func (m *acmeMatch) match(br *bufio.Reader) (Target, string) {
 	sni := clientHelloServerName(br)
 	if !strings.HasSuffix(sni, ".acme.invalid") {
-		return nil
+		return nil, ""
 	}
 
 	// TODO: cache. ACME issuers will hit multiple times in a short
@@ -107,12 +108,12 @@ func (m *acmeMatch) match(br *bufio.Reader) Target {
 	}
 	for range m.cfg.acmeTargets {
 		if target := <-ch; target != nil {
-			return target
+			return target, sni
 		}
 	}
 
 	// No target was happy with the provided challenge.
-	return nil
+	return nil, ""
 }
 
 func tryACME(ctx context.Context, ch chan<- Target, dest Target, sni string) {

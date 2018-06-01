@@ -46,11 +46,12 @@ type httpHostMatch struct {
 	target  Target
 }
 
-func (m httpHostMatch) match(br *bufio.Reader) Target {
-	if m.matcher(context.TODO(), httpHostHeader(br)) {
-		return m.target
+func (m httpHostMatch) match(br *bufio.Reader) (Target, string) {
+	hh := httpHostHeader(br)
+	if m.matcher(context.TODO(), hh) {
+		return m.target, hh
 	}
-	return nil
+	return nil, ""
 }
 
 // httpHostHeader returns the HTTP Host header from br without
