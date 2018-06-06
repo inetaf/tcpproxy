@@ -168,8 +168,10 @@ func (p *Proxy) AddRoute(ipPort string, dest Target) (routeID int) {
 //
 // Both AddRoute and RemoveRoute is go-routine safe.
 func (p *Proxy) RemoveRoute(ipPort string, routeID int) {
-	cfg := p.configFor(ipPort)
-	cfg.routes.Delete(routeID)
+	cfg := p.configs[ipPort]
+	if cfg != nil {
+		cfg.routes.Delete(routeID)
+	}
 }
 
 type fixedTarget struct {
