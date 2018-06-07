@@ -107,7 +107,10 @@ type route interface {
 	//
 	// match must not consume bytes from the given bufio.Reader, it
 	// can only Peek.
-	match(*bufio.Reader) Target
+	//
+	// If an sni or host header was parsed successfully, that will be
+	// returned as the second parameter.
+	match(*bufio.Reader) (Target, string)
 }
 
 func (p *Proxy) netListen() func(net, laddr string) (net.Listener, error) {
@@ -147,7 +150,7 @@ type fixedTarget struct {
 	t Target
 }
 
-func (m fixedTarget) match(*bufio.Reader) Target { return m.t }
+func (m fixedTarget) match(*bufio.Reader) (Target, string) { return m.t, "" }
 
 // Run is calls Start, and then Wait.
 //
@@ -224,12 +227,13 @@ func (p *Proxy) serveListener(ret chan<- error, ln net.Listener, routes []route)
 func (p *Proxy) serveConn(c net.Conn, routes []route) bool {
 	br := bufio.NewReader(c)
 	for _, route := range routes {
-		if target := route.match(br); target != nil {
+		if target, hostName := route.match(br); target != nil {
 			if n := br.Buffered(); n > 0 {
 				peeked, _ := br.Peek(br.Buffered())
 				c = &Conn{
-					Peeked: peeked,
-					Conn:   c,
+					HostName: hostName,
+					Peeked:   peeked,
+					Conn:     c,
 				}
 			}
 			target.HandleConn(c)
@@ -246,6 +250,14 @@ func (p *Proxy) serveConn(c net.Conn, routes []route) bool {
 // to determine how to route the connection. The Read method stitches
 // the peeked bytes and unread bytes back together.
 type Conn struct {
+	// HostName is the hostname field that was sent to the request router.
+	// In the case of TLS, this is the SNI header, in the case of HTTPHost
+	// route, it will be the host header.  In the case of a fixed
+	// route, i.e. those created with AddRoute(), this will always be
+	// empty.  This can be useful in the case where further routing decisions
+	// need to be made in the Target impementation.
+	HostName string
+
 	// Peeked are the bytes that have been read from Conn for the
 	// purposes of route matching, but have not yet been consumed
 	// by Read calls. It set to nil by Read when fully consumed.
