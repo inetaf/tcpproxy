@@ -73,7 +73,7 @@ type sniMatch struct {
 }
 
 func (m sniMatch) match(br *bufio.Reader) Target {
-	if m.matcher(context.TODO(), clientHelloServerName(br)) {
+	if m.matcher(context.TODO(), ClientHelloServerName(br)) {
 		return m.target
 	}
 	return nil
@@ -87,7 +87,7 @@ type acmeMatch struct {
 }
 
 func (m *acmeMatch) match(br *bufio.Reader) Target {
-	sni := clientHelloServerName(br)
+	sni := ClientHelloServerName(br)
 	if !strings.HasSuffix(sni, ".acme.invalid") {
 		return nil
 	}
@@ -152,10 +152,10 @@ func tryACME(ctx context.Context, ch chan<- Target, dest Target, sni string) {
 	ret = dest
 }
 
-// clientHelloServerName returns the SNI server name inside the TLS ClientHello,
+// ClientHelloServerName returns the SNI server name inside the TLS ClientHello,
 // without consuming any bytes from br.
 // On any error, the empty string is returned.
-func clientHelloServerName(br *bufio.Reader) (sni string) {
+func ClientHelloServerName(br *bufio.Reader) (sni string) {
 	const recordHeaderLen = 5
 	hdr, err := br.Peek(recordHeaderLen)
 	if err != nil {

@@ -80,6 +80,9 @@ type Proxy struct {
 	// function. If nil, net.Dial is used.
 	// The provided net is always "tcp".
 	ListenFunc func(net, laddr string) (net.Listener, error)
+
+	// defaultHandler handles unmatched traffic
+	defaultHandler Target
 }
 
 // Matcher reports whether hostname matches the Matcher's criteria.
@@ -149,6 +152,11 @@ func (p *Proxy) addRoute(ipPort string, r route) (routeID int) {
 		cfg.routes.Store(routeID, r)
 	}
 	return
+}
+
+// SetDefaultHandler sets the default handler for proxy.
+func (p *Proxy) SetDefaultHandler(t Target) {
+	p.defaultHandler = t
 }
 
 // AddRoute appends an always-matching route to the ipPort listener,
@@ -272,9 +280,13 @@ func (p *Proxy) serveConn(c net.Conn, cfg *config) bool {
 		return true
 	})
 	if !handled {
-		// TODO: hook for this?
-		log.Printf("tcpproxy: no routes matched conn %v/%v; closing", c.RemoteAddr().String(), c.LocalAddr().String())
-		c.Close()
+		if p.defaultHandler != nil {
+			p.defaultHandler.HandleConn(c)
+		} else {
+			// TODO: hook for this?
+			log.Printf("tcpproxy: no routes matched conn %v/%v; closing", c.RemoteAddr().String(), c.LocalAddr().String())
+			c.Close()
+		}
 	}
 	return handled
 }
