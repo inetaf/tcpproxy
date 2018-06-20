@@ -254,7 +254,7 @@ type Conn struct {
 	// In the case of TLS, this is the SNI header, in the case of HTTPHost
 	// route, it will be the host header.  In the case of a fixed
 	// route, i.e. those created with AddRoute(), this will always be
-	// empty.  This can be useful in the case where further routing decisions
+	// empty. This can be useful in the case where further routing decisions
 	// need to be made in the Target impementation.
 	HostName string
 
@@ -421,12 +421,21 @@ func (dp *DialProxy) sendProxyHeader(w io.Writer, src net.Conn) error {
 // proxyCopy is the function that copies bytes around.
 // It's a named function instead of a func literal so users get
 // named goroutines in debug goroutine stack dumps.
-func proxyCopy(errc chan<- error, dst io.Writer, src io.Reader) {
-	// TODO: make caller switch from src to rawSrc after N bytes (e.g. 4KB)
-	// if the io.Copy optimization to switch to Linux splice happens.
-	// TODO: if the runtime provides a way to wait for
-	// readability, use that to avoid stranding big blocks of
-	// memory blocked in idle reads.
+func proxyCopy(errc chan<- error, dst, src net.Conn) {
+	// Before we unwrap src and/or dst, copy any buffered data.
+	if wc, ok := src.(*Conn); ok && len(wc.Peeked) > 0 {
+		if _, err := dst.Write(wc.Peeked); err != nil {
+			errc <- err
+			return
+		}
+		wc.Peeked = nil
+	}
+
+	// Unwrap the src and dst from *Conn to *net.TCPConn so Go
+	// 1.11's splice optimization kicks in.
+	src = UnderlyingConn(src)
+	dst = UnderlyingConn(dst)
+
 	_, err := io.Copy(dst, src)
 	errc <- err
 }
