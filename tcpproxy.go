@@ -347,6 +347,8 @@ func UnderlyingConn(c net.Conn) net.Conn {
 	return c
 }
 
+func goCloseConn(c net.Conn) { go c.Close() }
+
 // HandleConn implements the Target interface.
 func (dp *DialProxy) HandleConn(src net.Conn) {
 	ctx := context.Background()
@@ -362,13 +364,13 @@ func (dp *DialProxy) HandleConn(src net.Conn) {
 		dp.onDialError()(src, err)
 		return
 	}
-	defer dst.Close()
+	defer goCloseConn(dst)
 
 	if err = dp.sendProxyHeader(dst, src); err != nil {
 		dp.onDialError()(src, err)
 		return
 	}
-	defer src.Close()
+	defer goCloseConn(src)
 
 	if ka := dp.keepAlivePeriod(); ka > 0 {
 		if c, ok := UnderlyingConn(src).(*net.TCPConn); ok {
