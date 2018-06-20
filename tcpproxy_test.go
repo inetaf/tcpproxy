@@ -27,8 +27,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math/big"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -441,6 +443,9 @@ func readTLS(dest, domain string) (string, error) {
 }
 
 func TestProxyACME(t *testing.T) {
+	log.SetOutput(ioutil.Discard)
+	defer log.SetOutput(os.Stderr)
+
 	front := newLocalListener(t)
 	defer front.Close()
 
