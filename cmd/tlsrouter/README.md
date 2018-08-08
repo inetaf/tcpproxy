@@ -11,7 +11,7 @@ This is not an official Google project.
 Install TLSRouter via `go get`:
 
 ```shell
-go get go.universe.tf/tlsrouter
+go get go.universe.tf/tcpproxy/cmd/tlsrouter
 ```
 
 ## Usage
