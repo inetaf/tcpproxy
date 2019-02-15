@@ -411,7 +411,7 @@ func (dp *DialProxy) sendProxyHeader(w io.Writer, src net.Conn) error {
 		if srcAddr.IP.To4() == nil {
 			family = "TCP6"
 		}
-		_, err := fmt.Fprintf(w, "PROXY %s %s %d %s %d\r\n", family, srcAddr.IP, srcAddr.Port, dstAddr.IP, dstAddr.Port)
+		_, err := fmt.Fprintf(w, "PROXY %s %s %s %d %d\r\n", family, srcAddr.IP, dstAddr.IP, srcAddr.Port, dstAddr.Port)
 		return err
 	default:
 		return fmt.Errorf("PROXY protocol version %d not supported", dp.ProxyProtocolVersion)
