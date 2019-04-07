@@ -16,20 +16,35 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
 
 var (
-	cfgFile      = flag.String("conf", "", "configuration file")
-	listen       = flag.String("listen", ":443", "listening port")
-	helloTimeout = flag.Duration("hello-timeout", 3*time.Second, "how long to wait for the TLS ClientHello")
+	cfgFile         = flag.String("conf", "", "configuration file")
+	listen          = flag.String("listen", ":443", "listening port")
+	helloTimeout    = flag.Duration("hello-timeout", 3*time.Second, "how long to wait for the TLS ClientHello")
+	helloMss        = flag.Int64("hello-mss", 16, "how many bytes to fragment/segment the TLS ClientHello")
+	resolverAddress = flag.String("dns", "dns.google", "address of the dns resolver")
+	resolverNetwork = flag.String("dns-net", "", "protocol for the dns resolver (e.g. \"tcp-tls\" or \"tcp\" or \"udp\")")
 )
+
+// CustomDialer with timeout
+var CustomDialer = &net.Dialer{
+	Timeout: 15 * time.Second,
+	Resolver: &net.Resolver{
+		PreferGo: true,
+		Dial:     dialDNSResolver,
+	},
+}
 
 func main() {
 	flag.Parse()
@@ -142,7 +157,7 @@ func (c *Conn) proxy() {
 	}
 
 	c.logf("routing %q to %q", c.hostname, c.backend)
-	backend, err := net.DialTimeout("tcp", c.backend, 10*time.Second)
+	backend, err := CustomDialer.Dial("tcp", c.backend)
 	if err != nil {
 		c.internalError("failed to dial backend %q for %q: %s", c.backend, c.hostname, err)
 		return
@@ -168,7 +183,20 @@ func (c *Conn) proxy() {
 
 	// Replay the piece of the handshake we had to read to do the
 	// routing, then blindly proxy any other bytes.
-	if _, err = io.Copy(c.backendConn, &handshakeBuf); err != nil {
+	if *helloMss == 0 {
+		_, err = io.Copy(c.backendConn, &handshakeBuf)
+	} else {
+		for {
+			_, err = io.CopyN(c.backendConn, &handshakeBuf, *helloMss)
+			if err != nil {
+				if err == io.EOF {
+					err = nil
+				}
+				break
+			}
+		}
+	}
+	if err != nil {
 		c.internalError("failed to replay handshake to %q: %s", c.backend, err)
 		return
 	}
@@ -188,4 +216,31 @@ func proxy(wg *sync.WaitGroup, a, b net.Conn) {
 	}
 	btcp.CloseWrite()
 	atcp.CloseRead()
+}
+
+func dialDNSResolver(ctx context.Context, network, address string) (net.Conn, error) {
+	if *resolverNetwork != "" {
+		network = *resolverNetwork
+	}
+	if *resolverAddress != "" {
+		address = *resolverAddress
+	}
+
+	d := net.Dialer{
+		Timeout: 10 * time.Second,
+	}
+
+	useTLS := strings.HasPrefix(network, "tcp") && strings.HasSuffix(network, "-tls")
+	if useTLS {
+		network = strings.TrimSuffix(network, "-tls")
+		if !strings.Contains(address, ":") {
+			address += ":853"
+		}
+		return tls.DialWithDialer(&d, network, address, nil)
+	}
+
+	if !strings.Contains(address, ":") {
+		address += ":53"
+	}
+	return d.DialContext(ctx, network, address)
 }
