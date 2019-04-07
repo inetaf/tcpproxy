@@ -37,12 +37,31 @@ var (
 	resolverNetwork = flag.String("dns-net", "", "protocol for the dns resolver (e.g. \"tcp-tls\" or \"tcp\" or \"udp\")")
 )
 
-// CustomDialer with timeout
-var CustomDialer = &net.Dialer{
+// BackendDialer with timeout
+var BackendDialer = &net.Dialer{
 	Timeout: 15 * time.Second,
 	Resolver: &net.Resolver{
 		PreferGo: true,
 		Dial:     dialDNSResolver,
+	},
+}
+
+// ResolverDialer with timeout
+var ResolverDialer = &net.Dialer{
+	Timeout: 10 * time.Second,
+}
+
+// ResolverTLSConfig for DNS-over-TLS
+var ResolverTLSConfig = &tls.Config{
+	MinVersion:       tls.VersionTLS12,
+	CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP521, tls.CurveP384, tls.CurveP256},
+	CipherSuites: []uint16{
+		// tls.TLS_CHACHA20_POLY1305_SHA256,
+		// tls.TLS_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	},
 }
 
@@ -157,7 +176,7 @@ func (c *Conn) proxy() {
 	}
 
 	c.logf("routing %q to %q", c.hostname, c.backend)
-	backend, err := CustomDialer.Dial("tcp", c.backend)
+	backend, err := BackendDialer.Dial("tcp", c.backend)
 	if err != nil {
 		c.internalError("failed to dial backend %q for %q: %s", c.backend, c.hostname, err)
 		return
@@ -226,21 +245,17 @@ func dialDNSResolver(ctx context.Context, network, address string) (net.Conn, er
 		address = *resolverAddress
 	}
 
-	d := net.Dialer{
-		Timeout: 10 * time.Second,
-	}
-
 	useTLS := strings.HasPrefix(network, "tcp") && strings.HasSuffix(network, "-tls")
 	if useTLS {
 		network = strings.TrimSuffix(network, "-tls")
 		if !strings.Contains(address, ":") {
 			address += ":853"
 		}
-		return tls.DialWithDialer(&d, network, address, nil)
+		return tls.DialWithDialer(ResolverDialer, network, address, ResolverTLSConfig)
 	}
 
 	if !strings.Contains(address, ":") {
 		address += ":53"
 	}
-	return d.DialContext(ctx, network, address)
+	return ResolverDialer.DialContext(ctx, network, address)
 }
