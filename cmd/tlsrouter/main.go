@@ -32,8 +32,8 @@ var (
 	cfgFile         = flag.String("conf", "", "configuration file")
 	listen          = flag.String("listen", ":443", "listening port")
 	helloTimeout    = flag.Duration("hello-timeout", 3*time.Second, "how long to wait for the TLS ClientHello")
-	helloMss        = flag.Int64("hello-mss", 16, "how many bytes to fragment/segment the TLS ClientHello")
-	resolverAddress = flag.String("dns", "dns.google", "address of the dns resolver")
+	helloMss        = flag.Int64("hello-mss", 0, "how many bytes to fragment/segment the TLS ClientHello")
+	resolverAddress = flag.String("dns", "", "address of the dns resolver")
 	resolverNetwork = flag.String("dns-net", "", "protocol for the dns resolver (e.g. \"tcp-tls\" or \"tcp\" or \"udp\")")
 )
 
