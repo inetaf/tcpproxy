@@ -362,7 +362,7 @@ func (t *tlsServer) Close() {
 // cert creates a well-formed, but completely insecure self-signed
 // cert for domain.
 func cert(t *testing.T, domain string) tls.Certificate {
-	private, err := rsa.GenerateKey(rand.Reader, 512)
+	private, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
 	}
