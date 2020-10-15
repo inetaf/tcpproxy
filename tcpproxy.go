@@ -318,6 +318,10 @@ type DialProxy struct {
 	// If negative, the timeout is disabled.
 	DialTimeout time.Duration
 
+	// TCPUserTimeout optionally specifies a TCP_USER_TIMEOUT (only on Linux).
+	// If zero, TCP_USER_TIMEOUT is not set.
+	TCPUserTimeout time.Duration
+
 	// DialContext optionally specifies an alternate dial function
 	// for TCP targets. If nil, the standard
 	// net.Dialer.DialContext method is used.
@@ -381,6 +385,11 @@ func (dp *DialProxy) HandleConn(src net.Conn) {
 			c.SetKeepAlive(true)
 			c.SetKeepAlivePeriod(ka)
 		}
+	}
+
+	if dp.TCPUserTimeout > 0 {
+		SetTCPUserTimeout(src, dp.TCPUserTimeout)
+		SetTCPUserTimeout(dst, dp.TCPUserTimeout)
 	}
 
 	errc := make(chan error, 1)
