@@ -1,24 +1,19 @@
 language: go
 go:
-- "1.12"
-- "1.13"
+- "1.16.x"
+- "1.17.x"
 - tip
 os:
 - linux
-install:
-- go get github.com/golang/lint/golint
-before_script: 
 script:
-- go get -t ./...
 - go build ./...
 - go test ./...
 - go vet ./...
-- golint -set_exit_status .
 
 jobs:
   include:
     - stage: deploy
-      go: "1.13"
+      go: "1.16"
       install:
       - gem install fpm
       script:

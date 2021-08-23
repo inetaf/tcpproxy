@@ -182,7 +182,7 @@ func serveTLS(t *testing.T, value string, understandProxy bool, domains ...strin
 }
 
 func selfSignedCert(domains []string) (tls.Certificate, *x509.CertPool, error) {
-	pkey, err := rsa.GenerateKey(rand.Reader, 512)
+	pkey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return tls.Certificate{}, nil, err
 	}
@@ -192,16 +192,16 @@ func selfSignedCert(domains []string) (tls.Certificate, *x509.CertPool, error) {
 			Organization: []string{"Test Co"},
 			CommonName:   domains[0],
 		},
-		NotBefore:             time.Time{},
+		NotBefore:             time.Now().Add(-5 * time.Minute),
 		NotAfter:              time.Now().Add(60 * time.Minute),
 		IsCA:                  true,
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
-		DNSNames:              domains[1:],
+		DNSNames:              domains[:],
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, &pkey.PublicKey, pkey)
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, pkey.Public(), pkey)
 	if err != nil {
 		return tls.Certificate{}, nil, err
 	}
