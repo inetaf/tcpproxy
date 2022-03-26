@@ -295,7 +295,7 @@ type Target interface {
 	HandleConn(net.Conn)
 }
 
-// To is shorthand way of writing &tlsproxy.DialProxy{Addr: addr}.
+// To is shorthand way of writing &tcpproxy.DialProxy{Addr: addr}.
 func To(addr string) *DialProxy {
 	return &DialProxy{Addr: addr}
 }
