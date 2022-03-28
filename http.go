@@ -79,7 +79,7 @@ func httpHostHeader(br *bufio.Reader) string {
 			if bytes.Index(b, crlfcrlf) != -1 || bytes.Index(b, lflf) != -1 {
 				req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(b)))
 				if err != nil {
-					return ""
+					return httpHostHeaderFromBytes(b)
 				}
 				if len(req.Header["Host"]) > 1 {
 					// TODO(bradfitz): what does
