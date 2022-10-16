@@ -57,7 +57,16 @@ func (p *Proxy) AddSNIMatchRoute(ipPort string, matcher Matcher, dest Target) {
 		cfg.acmeTargets = append(cfg.acmeTargets, dest)
 	}
 
-	p.addRoute(ipPort, sniMatch{matcher, dest})
+	p.addRoute(ipPort, sniMatch{matcher: matcher, target: dest})
+}
+
+// SNITargetFunc is the func callback used by Proxy.AddSNIRouteFunc.
+type SNITargetFunc func(ctx context.Context, sniName string) (t Target, ok bool)
+
+// AddSNIRouteFunc adds a route to ipPort that matches an SNI request and calls
+// fn to map its nap to a target.
+func (p *Proxy) AddSNIRouteFunc(ipPort string, fn SNITargetFunc) {
+	p.addRoute(ipPort, sniMatch{targetFunc: fn})
 }
 
 // AddStopACMESearch prevents ACME probing of subsequent SNI routes.
@@ -71,10 +80,22 @@ func (p *Proxy) AddStopACMESearch(ipPort string) {
 type sniMatch struct {
 	matcher Matcher
 	target  Target
+
+	// Alternatively, if targetFunc is non-nil, it's used instead:
+	targetFunc SNITargetFunc
 }
 
 func (m sniMatch) match(br *bufio.Reader) (Target, string) {
 	sni := clientHelloServerName(br)
+	if sni == "" {
+		return nil, ""
+	}
+	if m.targetFunc != nil {
+		if t, ok := m.targetFunc(context.TODO(), sni); ok {
+			return t, sni
+		}
+		return nil, ""
+	}
 	if m.matcher(context.TODO(), sni) {
 		return m.target, sni
 	}
