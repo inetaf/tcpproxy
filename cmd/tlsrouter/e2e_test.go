@@ -34,12 +34,6 @@ func TestRouting(t *testing.T) {
 	}
 	defer s2.Close()
 
-	s3, err := serveTLS(t, "server3", false, "blarghblargh.acme.invalid")
-	if err != nil {
-		t.Fatalf("server TLS server3: %s", err)
-	}
-	defer s3.Close()
-
 	s4, err := serveTLS(t, "server4", true, "proxy.design")
 	if err != nil {
 		t.Fatalf("server TLS server4: %s", err)
@@ -58,9 +52,8 @@ func TestRouting(t *testing.T) {
 	if err := p.Config.ReadString(fmt.Sprintf(`
 test.com %s
 foo.net %s
-borkbork.tf %s
 proxy.design %s PROXY
-`, s1.Addr(), s2.Addr(), s3.Addr(), s4.Addr())); err != nil {
+`, s1.Addr(), s2.Addr(), s4.Addr())); err != nil {
 		t.Fatalf("configure proxy: %s", err)
 	}
 
@@ -73,7 +66,6 @@ proxy.design %s PROXY
 		{"test.com", "server1", s1.Pool, true, false},
 		{"foo.net", "server2", s2.Pool, true, false},
 		{"bar.org", "", s1.Pool, false, false},
-		{"blarghblargh.acme.invalid", "server3", s3.Pool, true, false},
 		{"proxy.design", "server4", s4.Pool, true, true},
 	} {
 		res, transparent, err := getTLS(l.Addr().String(), test.N, test.P)

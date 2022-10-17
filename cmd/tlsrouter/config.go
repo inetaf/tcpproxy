@@ -37,7 +37,6 @@ type Route struct {
 type Config struct {
 	mu     sync.Mutex
 	routes []Route
-	acme   *ACME
 }
 
 func dnsRegex(s string) (*regexp.Regexp, error) {
@@ -63,10 +62,6 @@ func dnsRegex(s string) (*regexp.Regexp, error) {
 func (c *Config) Match(hostname string) (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	if strings.HasSuffix(hostname, ".acme.invalid") {
-		return c.acme.Match(hostname), false
-	}
 
 	for _, r := range c.routes {
 		if r.match.MatchString(hostname) {
@@ -123,10 +118,6 @@ func (c *Config) Read(r io.Reader) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.routes = routes
-	c.acme = &ACME{
-		backends: backends,
-		cache:    make(map[string]acmeCacheEntry),
-	}
 	return nil
 }
 

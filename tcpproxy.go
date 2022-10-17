@@ -93,9 +93,7 @@ func equals(want string) Matcher {
 
 // config contains the proxying state for one listener.
 type config struct {
-	routes      []route
-	acmeTargets []Target // accumulates targets that should be probed for acme.
-	stopACME    bool     // if true, AddSNIRoute doesn't add targets to acmeTargets.
+	routes []route
 }
 
 // A route matches a connection to a target.
