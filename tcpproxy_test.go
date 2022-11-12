@@ -339,6 +339,7 @@ func TestProxyPROXYOut(t *testing.T) {
 	p.AddRoute(testFrontAddr, &DialProxy{
 		Addr:                 back.Addr().String(),
 		ProxyProtocolVersion: 1,
+		TCPUserTimeout:       time.Second,
 	})
 	if err := p.Start(); err != nil {
 		t.Fatal(err)
