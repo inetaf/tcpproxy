@@ -174,6 +174,45 @@ func testProxy(t *testing.T, front net.Listener) *Proxy {
 	}
 }
 
+func TestBufferedClose(t *testing.T) {
+	front := newLocalListener(t)
+	defer front.Close()
+	back := newLocalListener(t)
+	defer back.Close()
+
+	p := testProxy(t, front)
+	p.AddRoute(testFrontAddr, To(back.Addr().String()))
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	toFront, err := net.Dial("tcp", front.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer toFront.Close()
+
+	fromProxy, err := back.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fromProxy.Close()
+	const msg = "message"
+	if _, err := io.WriteString(toFront, msg); err != nil {
+		t.Fatal(err)
+	}
+	// actively close toFront, the write should still make to the back.
+	toFront.Close()
+
+	buf := make([]byte, len(msg))
+	if _, err := io.ReadFull(fromProxy, buf); err != nil {
+		t.Fatal(err)
+	}
+	if string(buf) != msg {
+		t.Fatalf("got %q; want %q", buf, msg)
+	}
+}
+
 func TestProxyAlwaysMatch(t *testing.T) {
 	front := newLocalListener(t)
 	defer front.Close()
@@ -196,6 +235,7 @@ func TestProxyAlwaysMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer fromProxy.Close()
 	const msg = "message"
 	io.WriteString(toFront, msg)
 
