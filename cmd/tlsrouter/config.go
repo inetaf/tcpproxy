@@ -64,8 +64,10 @@ func (c *Config) Match(hostname string) (string, bool) {
 	defer c.mu.Unlock()
 
 	for _, r := range c.routes {
-		if r.match.MatchString(hostname) {
-			return r.backend, r.proxyInfo
+		matches := r.match.FindStringSubmatchIndex(hostname)
+		if matches != nil {
+			result := r.match.ExpandString(nil, r.backend, hostname, matches)
+			return string(result), r.proxyInfo
 		}
 	}
 	return "", false
