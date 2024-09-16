@@ -408,6 +408,50 @@ func TestProxyPROXYOut(t *testing.T) {
 	}
 }
 
+func TestSetRoutes(t *testing.T) {
+
+	var p Proxy
+	ipPort := ":8080"
+	p.AddRoute(ipPort, To("127.0.0.2:8080"))
+	cfg := p.configFor(ipPort)
+
+	expectedAddrsList := [][]string{
+		{"127.0.0.1:80"},
+		{"127.0.0.1:80", "127.0.0.1:443"},
+		{},
+		{"127.0.0.1:80"},
+	}
+
+	for _, expectedAddrs := range expectedAddrsList {
+		p.setRoutes(ipPort, stringsToTargets(expectedAddrs))
+		if !equalRoutes(cfg.routes, expectedAddrs) {
+			t.Fatalf("got %v; want %v", cfg.routes, expectedAddrs)
+		}
+	}
+}
+
+func stringsToTargets(s []string) []Target {
+	targets := make([]Target, len(s))
+	for i, v := range s {
+		targets[i] = To(v)
+	}
+
+	return targets
+}
+func equalRoutes(routes []route, expectedAddrs []string) bool {
+	if len(routes) != len(expectedAddrs) {
+		return false
+	}
+
+	for i, _ := range routes {
+		addr := routes[i].(fixedTarget).t.(*DialProxy).Addr
+		if addr != expectedAddrs[i] {
+			return false
+		}
+	}
+	return true
+}
+
 type tlsServer struct {
 	Listener net.Listener
 	Domain   string
