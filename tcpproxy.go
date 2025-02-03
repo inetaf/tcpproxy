@@ -495,7 +495,13 @@ func (dp *DialProxy) onDialError() func(src net.Conn, dstDialErr error) {
 		return dp.OnDialError
 	}
 	return func(src net.Conn, dstDialErr error) {
-		log.Printf("tcpproxy: for incoming conn %v, error dialing %q: %v", src.RemoteAddr().String(), dp.Addr, dstDialErr)
+		var remoteAddr string
+		if ra := src.RemoteAddr(); ra != nil {
+			remoteAddr = ra.String()
+		} else {
+			remoteAddr = fmt.Sprintf("[%T with nil RemoteAddr]", src)
+		}
+		log.Printf("tcpproxy: for incoming conn %v, error dialing %q: %v", remoteAddr, dp.Addr, dstDialErr)
 		src.Close()
 	}
 }
