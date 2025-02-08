@@ -144,6 +144,23 @@ func (p *Proxy) AddRoute(ipPort string, dest Target) {
 	p.addRoute(ipPort, fixedTarget{dest})
 }
 
+func (p *Proxy) setRoutes(ipPort string, targets []Target) {
+	var routes []route
+	for _, target := range targets {
+		routes = append(routes, fixedTarget{target})
+	}
+	cfg := p.configFor(ipPort)
+	cfg.routes = routes
+}
+
+// SetRoutes replaces routes for the ipPort.
+//
+// It's possible that the old routes are still used once after this
+// function is called.
+func (p *Proxy) SetRoutes(ipPort string, targets []Target) {
+	p.setRoutes(ipPort, targets)
+}
+
 type fixedTarget struct {
 	t Target
 }
@@ -198,7 +215,7 @@ func (p *Proxy) Start() error {
 			return err
 		}
 		p.lns = append(p.lns, ln)
-		go p.serveListener(errc, ln, config.routes)
+		go p.serveListener(errc, ln, config)
 	}
 	go p.awaitFirstError(errc)
 	return nil
@@ -209,22 +226,22 @@ func (p *Proxy) awaitFirstError(errc <-chan error) {
 	close(p.donec)
 }
 
-func (p *Proxy) serveListener(ret chan<- error, ln net.Listener, routes []route) {
+func (p *Proxy) serveListener(ret chan<- error, ln net.Listener, cfg *config) {
 	for {
 		c, err := ln.Accept()
 		if err != nil {
 			ret <- err
 			return
 		}
-		go p.serveConn(c, routes)
+		go p.serveConn(c, cfg)
 	}
 }
 
 // serveConn runs in its own goroutine and matches c against routes.
 // It returns whether it matched purely for testing.
-func (p *Proxy) serveConn(c net.Conn, routes []route) bool {
+func (p *Proxy) serveConn(c net.Conn, cfg *config) bool {
 	br := bufio.NewReader(c)
-	for _, route := range routes {
+	for _, route := range cfg.routes {
 		if target, hostName := route.match(br); target != nil {
 			if n := br.Buffered(); n > 0 {
 				peeked, _ := br.Peek(br.Buffered())
