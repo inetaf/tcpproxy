@@ -38,16 +38,34 @@ func (p *Proxy) AddHTTPHostRoute(ipPort, httpHost string, dest Target) {
 //
 // The ipPort is any valid net.Listen TCP address.
 func (p *Proxy) AddHTTPHostMatchRoute(ipPort string, match Matcher, dest Target) {
-	p.addRoute(ipPort, httpHostMatch{match, dest})
+	p.addRoute(ipPort, httpHostMatch{matcher: match, target: dest})
+}
+
+// HTTPHostTargetFunc is the func callback used by Proxy.AddHTTPHostRouteFunc.
+type HTTPHostTargetFunc func(ctx context.Context, httpHost string) (t Target, ok bool)
+
+// AddHTTPHostRouteFunc adds a route to ipPort that matches an HTTP request and calls
+// fn to map it to a target.
+func (p *Proxy) AddHTTPHostRouteFunc(ipPort string, fn HTTPHostTargetFunc) {
+	p.addRoute(ipPort, httpHostMatch{targetFunc: fn})
 }
 
 type httpHostMatch struct {
 	matcher Matcher
 	target  Target
+
+	// Alternatively, if targetFunc is non-nil, it's used instead:
+	targetFunc HTTPHostTargetFunc
 }
 
 func (m httpHostMatch) match(br *bufio.Reader) (Target, string) {
 	hh := httpHostHeader(br)
+	if m.targetFunc != nil {
+		if t, ok := m.targetFunc(context.TODO(), hh); ok {
+			return t, hh
+		}
+		return nil, ""
+	}
 	if m.matcher(context.TODO(), hh) {
 		return m.target, hh
 	}
