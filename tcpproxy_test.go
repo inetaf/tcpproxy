@@ -72,7 +72,7 @@ func TestMatchHTTPHost(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			br := bufio.NewReader(tt.r)
-			r := httpHostMatch{equals(tt.host), noopTarget{}}
+			r := httpHostMatch{matcher: equals(tt.host), target: noopTarget{}}
 			m, name := r.match(br)
 			got := m != nil
 			if got != tt.want {
@@ -260,6 +260,50 @@ func TestProxyHTTP(t *testing.T) {
 	p := testProxy(t, front)
 	p.AddHTTPHostRoute(testFrontAddr, "foo.com", To(backFoo.Addr().String()))
 	p.AddHTTPHostRoute(testFrontAddr, "bar.com", To(backBar.Addr().String()))
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	toFront, err := net.Dial("tcp", front.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer toFront.Close()
+
+	const msg = "GET / HTTP/1.1\r\nHost: bar.com\r\n\r\n"
+	io.WriteString(toFront, msg)
+
+	fromProxy, err := backBar.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buf := make([]byte, len(msg))
+	if _, err := io.ReadFull(fromProxy, buf); err != nil {
+		t.Fatal(err)
+	}
+	if string(buf) != msg {
+		t.Fatalf("got %q; want %q", buf, msg)
+	}
+}
+
+func TestProxyHTTPFunc(t *testing.T) {
+	front := newLocalListener(t)
+	defer front.Close()
+
+	backFoo := newLocalListener(t)
+	defer backFoo.Close()
+	backBar := newLocalListener(t)
+	defer backBar.Close()
+
+	p := testProxy(t, front)
+	p.AddHTTPHostRouteFunc(testFrontAddr, func(ctx context.Context, httpHost string) (_ Target, ok bool) {
+		if httpHost == "bar.com" {
+			return To(backBar.Addr().String()), true
+		}
+		t.Fatalf("failed to match %q", httpHost)
+		return nil, false
+	})
 	if err := p.Start(); err != nil {
 		t.Fatal(err)
 	}
