@@ -458,8 +458,8 @@ func proxyCopy(errc chan<- error, dst, src net.Conn) {
 
 	// Unwrap the src and dst from *Conn to *net.TCPConn so Go
 	// 1.11's splice optimization kicks in.
-	src = UnderlyingConn(src)
-	dst = UnderlyingConn(dst)
+	src = tcpConn(src)
+	dst = tcpConn(dst)
 
 	_, err := io.Copy(dst, src)
 	errc <- err
